@@ -1,0 +1,16 @@
+{
+  "name": "zonemta-wildduck",
+  "version": "1.0.0",
+  "description": "Wild Duck MSA plugin for ZoneMTA",
+  "main": "index.js",
+  "author": "Andris Reinman",
+  "license": "EUPL-1.1",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "mongodb": "^2.2.25",
+    "nodemailer": "^3.1.8"
+  },
+  "devDependencies": {
+    "eslint-config-nodemailer": "^1.0.0"
+  }
+}
