@@ -5,6 +5,9 @@
   "main": "index.js",
   "author": "Andris Reinman",
   "license": "EUPL-1.1",
+  "scripts": {
+    "test": "grunt"
+  },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "mongodb": "^2.2.25",
@@ -12,12 +15,9 @@
     "wildduck": "^1.0.14"
   },
   "devDependencies": {
-      "chai": "^3.5.0",
       "eslint-config-nodemailer": "^1.0.0",
       "grunt": "^1.0.1",
       "grunt-cli": "^1.2.0",
-      "grunt-eslint": "^19.0.0",
-      "grunt-mocha-test": "^0.13.2",
-      "mocha": "^3.2.0"
+      "grunt-eslint": "^19.0.0"
   }
 }
