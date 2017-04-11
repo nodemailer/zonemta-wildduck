@@ -5,15 +5,20 @@ const bcrypt = require('bcryptjs');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const mongodb = require('mongodb');
+const MessageHandler = require('wildduck/lib/message-handler');
 const MongoClient = mongodb.MongoClient;
 
 module.exports.title = 'Wild Duck MSA';
 module.exports.init = function (app, done) {
 
+    const users = new WeakSet();
+
     MongoClient.connect(app.config.mongo, (err, database) => {
         if (err) {
             return done(err);
         }
+
+        const messageHandler = new MessageHandler(database);
 
         // handle user authentication
         app.addHook('smtp:auth', (auth, session, next) => {
@@ -27,7 +32,7 @@ module.exports.init = function (app, done) {
                     return next(err);
                 }
                 if (!user || !bcrypt.compareSync(password, user.password)) {
-                    err.message = new Error('Authentication failed');
+                    err = new Error('Authentication failed');
                     err.responseCode = 535;
                     return next(err);
                 }
@@ -59,15 +64,9 @@ module.exports.init = function (app, done) {
                 }
             }
 
-            database.collection('users').findOne({
-                username: envelope.user
-            }, (err, userData) => {
+            getUser(envelope, (err, userData) => {
                 if (err) {
                     return next(err);
-                }
-
-                if (!userData.address) {
-                    return next(new Error('User "' + envelope.user + '" does not have a default email address set'));
                 }
 
                 database.collection('addresses').findOne({
@@ -118,9 +117,151 @@ module.exports.init = function (app, done) {
             });
         });
 
+        // Check if an user is allowed to use specific address, if not then override using the default
+        app.addHook('message:queue', (envelope, messageInfo, next) => {
+            if (!envelope.user) {
+                return next();
+            }
+
+            getUser(envelope, (err, userData) => {
+                if (err) {
+                    return next(err);
+                }
+
+                if (userData.quota && userData.storageUsed > userData.quota) {
+                    // skip upload, not enough storage
+                    app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
+                    return next();
+                }
+
+                let chunks = [
+                    Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, app.config.hostname) + '\r\n'),
+                    envelope.headers.build()
+                ];
+                let chunklen = chunks[0].length + chunks[1].length;
+
+                let body = app.manager.queue.gridstore.createReadStream('message ' + envelope.id);
+                body.on('readable', () => {
+                    let chunk;
+                    while ((chunk = body.read()) !== null) {
+                        chunks.push(chunk);
+                        chunklen += chunk.length;
+                    }
+                });
+                body.once('error', err => next(err));
+                body.once('end', () => {
+                    setImmediate(next);
+                    messageHandler.add({
+                        user: userData._id,
+                        specialUse: '\\Sent',
+
+                        meta: {
+                            source: 'SMTP',
+                            from: envelope.from,
+                            to: envelope.to,
+                            origin: envelope.remoteAddress,
+                            originhost: envelope.clientHostname,
+                            transhost: envelope.hostNameAppearsAs,
+                            transtype: envelope.transmissionType,
+                            time: Date.now()
+                        },
+
+                        date: false,
+                        flags: ['\\Seen'],
+                        raw: Buffer.concat(chunks, chunklen),
+
+                        // if similar message exists, then skip
+                        skipExisting: true
+                    }, (err, success, info) => {
+                        if (err) {
+                            app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
+                        } else if (info) {
+                            app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
+                        } else {
+                            app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                        }
+                    });
+                });
+            });
+        });
+
+        function getUser(envelope, callback) {
+            let query = false;
+
+            if (users.has(envelope)) {
+                return callback(null, users.get(envelope));
+            }
+            if (envelope.user) {
+                query = {
+                    username: envelope.user
+                };
+            }
+
+            if (!query) {
+                return callback(new Error('Insufficient user info'));
+            }
+
+            database.collection('users').findOne(query, (err, user) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                if (!user) {
+                    return callback(new Error('User "' + query.username + '" was not found'));
+                }
+
+                users.set(envelope, user);
+
+                return callback(null, user);
+            });
+        }
+
         done();
     });
 };
+
+function generateReceivedHeader(envelope, hostname) {
+    let key = 'Received';
+    let origin = envelope.origin ? '[' + envelope.origin + ']' : '';
+    let originhost = envelope.originhost && envelope.originhost.charAt(0) !== '[' ? envelope.originhost : false;
+    origin = [].concat(origin || []).concat(originhost || []);
+
+    if (origin.length > 1) {
+        origin = '(' + origin.join(' ') + ')';
+    } else {
+        origin = origin.join(' ').trim() || 'localhost';
+    }
+
+    let value = '' +
+        // from ehlokeyword
+        'from' + (envelope.transhost ? ' ' + envelope.transhost : '') +
+        // [1.2.3.4]
+        ' ' + origin +
+        (originhost ? '\r\n' : '') +
+
+        // (Authenticated sender: username)
+        (envelope.user ? ' (Authenticated sender: ' + envelope.user + ')\r\n' : (!originhost ? '\r\n' : '')) +
+
+        // by smtphost
+        ' by ' + hostname +
+        // with ESMTP
+        ' with ' + envelope.transtype +
+        // id 12345678
+        ' id ' + envelope.id +
+
+        // for <receiver@example.com>
+        (envelope.to.length === 1 ? '\r\n for <' + envelope.to[0] + '>' : '') +
+
+        // (version=TLSv1/SSLv3 cipher=ECDHE-RSA-AES128-GCM-SHA256)
+        (envelope.tls ? '\r\n (version=' + envelope.tls.version + ' cipher=' + envelope.tls.name + ')' : '') +
+
+        ';' +
+        '\r\n' +
+
+        // Wed, 03 Aug 2016 11:32:07 +0000
+        ' ' + new Date(envelope.time).toUTCString().replace(/GMT/, '+0000');
+    return key + ': ' + value;
+}
 
 function normalizeAddress(address, withNames) {
     if (typeof address === 'string') {

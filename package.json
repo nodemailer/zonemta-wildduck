@@ -8,9 +8,16 @@
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "mongodb": "^2.2.25",
-    "nodemailer": "^3.1.8"
+    "nodemailer": "^4.0.0",
+    "wildduck": "^1.0.14"
   },
   "devDependencies": {
-    "eslint-config-nodemailer": "^1.0.0"
+      "chai": "^3.5.0",
+      "eslint-config-nodemailer": "^1.0.0",
+      "grunt": "^1.0.1",
+      "grunt-cli": "^1.2.0",
+      "grunt-eslint": "^19.0.0",
+      "grunt-mocha-test": "^0.13.2",
+      "mocha": "^3.2.0"
   }
 }

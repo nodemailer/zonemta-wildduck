@@ -17,7 +17,8 @@ Add a configuration entry in the "plugins" section of your ZoneMTA app
   "plugins": {
     "modules/zonemta-wildduck": {
         "enabled": "receiver",
-        "mongo": "mongodb://127.0.0.1:27017/wildduck"
+        "mongo": "mongodb://127.0.0.1:27017/wildduck",
+        "hostname": "mail.wildduck.email"
     }
   }
 ...
