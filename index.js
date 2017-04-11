@@ -2,6 +2,7 @@
 
 const punycode = require('punycode');
 const bcrypt = require('bcryptjs');
+const os = require('os');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const mongodb = require('mongodb');
@@ -19,9 +20,14 @@ module.exports.init = function (app, done) {
         }
 
         const messageHandler = new MessageHandler(database);
+        const interfaces = [].concat(app.config.interfaces || '*');
+        const allInterfaces = interfaces.includes('*');
 
         // handle user authentication
         app.addHook('smtp:auth', (auth, session, next) => {
+            if (!checkInterface(session.interface)) {
+                return next();
+            }
             let username = (auth.username || '').toString().toLowerCase().trim();
             let password = auth.password || '';
 
@@ -45,7 +51,7 @@ module.exports.init = function (app, done) {
 
         // Check if an user is allowed to use specific address, if not then override using the default
         app.addHook('message:headers', (envelope, messageInfo, next) => {
-            if (!envelope.user) {
+            if (!checkInterface(envelope.interface)) {
                 return next();
             }
 
@@ -119,7 +125,7 @@ module.exports.init = function (app, done) {
 
         // Check if an user is allowed to use specific address, if not then override using the default
         app.addHook('message:queue', (envelope, messageInfo, next) => {
-            if (!envelope.user) {
+            if (!checkInterface(envelope.interface)) {
                 return next();
             }
 
@@ -135,7 +141,7 @@ module.exports.init = function (app, done) {
                 }
 
                 let chunks = [
-                    Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, app.config.hostname) + '\r\n'),
+                    Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, app.config.hostname || os.hostname()) + '\r\n'),
                     envelope.headers.build()
                 ];
                 let chunklen = chunks[0].length + chunks[1].length;
@@ -184,6 +190,13 @@ module.exports.init = function (app, done) {
                 });
             });
         });
+
+        function checkInterface(iface){
+            if(allInterfaces || interfaces.includes(iface)){
+                return true;
+            }
+            return false;
+        }
 
         function getUser(envelope, callback) {
             let query = false;
