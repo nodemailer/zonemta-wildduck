@@ -11,7 +11,7 @@ const MongoClient = mongodb.MongoClient;
 module.exports.title = 'Wild Duck MSA';
 module.exports.init = function (app, done) {
 
-    const users = new WeakSet();
+    const users = new WeakMap();
 
     MongoClient.connect(app.config.mongo, (err, database) => {
         if (err) {
