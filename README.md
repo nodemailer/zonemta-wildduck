@@ -9,6 +9,7 @@ Wild Duck actions apply only interfaces that require authentication.
 * **authentication** – if authentication is enabled for the smtp interface then authentication data is checked against Wild Duck user accounts
 * **From rewriting** – if the message has a From: address in the header that is not registered as one of the aliases for this user then the address part (but not the name) is rewritten with the default address for this user
 * **Upload to Sent Mail folder** – sent message is automatically appended to the *Sent Mail* folder of the user
+* **Reciepient limiting** – limit RCPT TO calls for 24 hour period based on the *recipients* user value
 
 ## Setup
 
@@ -32,6 +33,7 @@ Add a configuration entry in the "plugins" section of your ZoneMTA app
     "modules/zonemta-wildduck": {
         "enabled": "receiver",
         "mongo": "mongodb://127.0.0.1:27017/wildduck",
+        "redis": "redis://127.0.0.1:6379/3",
         "hostname": "mail.wildduck.email"
     }
   }
@@ -42,6 +44,7 @@ Where
 
   * **enabled** states which ZoneMTA processes should use this plugin. Should be "receiver"
   * **mongo** is the connection string for the Wild Duck IMAP database
+  * **redis** is the connection string for the Wild Duck Redis database
   * **hostname** is the name to use in Received headers for uploaded messages
 
 Optional arguments:

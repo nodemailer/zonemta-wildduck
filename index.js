@@ -7,12 +7,33 @@ const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const mongodb = require('mongodb');
 const MessageHandler = require('wildduck/lib/message-handler');
+const tools = require('wildduck/lib/tools');
+const redis = require('redis');
 const MongoClient = mongodb.MongoClient;
 
 module.exports.title = 'Wild Duck MSA';
 module.exports.init = function (app, done) {
 
     const users = new WeakMap();
+    const redisClient = redis.createClient(tools.redisConfig(app.config.redis));
+
+    const recipientsCounter = `
+local increment = tonumber(ARGV[1]) or 0;
+local limit = tonumber(ARGV[2]) or 0;
+local current = tonumber(redis.call("GET", KEYS[1])) or 0;
+
+if current + increment > limit then
+    local ttl = tonumber(redis.call("TTL", KEYS[1])) or 0;
+    return {0, current, ttl};
+end;
+
+local updated = tonumber(redis.call("INCRBY", KEYS[1], increment));
+if current == 0 then
+    redis.call("EXPIRE", KEYS[1], 86400);
+end;
+
+return {1, updated};
+`;
 
     MongoClient.connect(app.config.mongo, (err, database) => {
         if (err) {
@@ -33,6 +54,12 @@ module.exports.init = function (app, done) {
 
             database.collection('users').findOne({
                 username
+            }, {
+                fields: {
+                    username: true,
+                    password: true,
+                    recipients: true
+                }
             }, (err, user) => {
                 if (err) {
                     return next(err);
@@ -42,6 +69,8 @@ module.exports.init = function (app, done) {
                     err.responseCode = 535;
                     return next(err);
                 }
+
+                users.set(session, user);
 
                 // consider the authentication as succeeded as we did not get an error
                 auth.username = username;
@@ -70,14 +99,14 @@ module.exports.init = function (app, done) {
                 }
             }
 
-            getUser(envelope, (err, userData) => {
+            getUser(envelope, (err, user) => {
                 if (err) {
                     return next(err);
                 }
 
                 database.collection('addresses').findOne({
                     address: normalizeAddress(envelope.from),
-                    user: userData._id
+                    user: user._id
                 }, (err, addressData) => {
 
                     if (err) {
@@ -86,8 +115,8 @@ module.exports.init = function (app, done) {
 
                     if (!addressData) {
                         // replace MAIL FROM address
-                        app.logger.info('Rewrite', '%s.%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"', envelope.id, envelope.seq, userData.username, envelope.from, userData.address);
-                        envelope.from = userData.address;
+                        app.logger.info('Rewrite', '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"', envelope.id, user.username, envelope.from, user.address);
+                        envelope.from = user.address;
                     }
 
                     if (!headerFromObj) {
@@ -96,7 +125,7 @@ module.exports.init = function (app, done) {
 
                     database.collection('addresses').findOne({
                         address: normalizeAddress(headerFromObj.address),
-                        user: userData._id
+                        user: user._id
                     }, (err, addressData) => {
                         if (err) {
                             return next(err);
@@ -107,7 +136,7 @@ module.exports.init = function (app, done) {
                             return next();
                         }
 
-                        app.logger.info('Rewrite', '%s.%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"', envelope.id, envelope.seq, userData.username, headerFromObj.address, envelope.from);
+                        app.logger.info('Rewrite', '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"', envelope.id, user.username, headerFromObj.address, envelope.from);
 
                         headerFromObj.address = envelope.from;
 
@@ -123,18 +152,61 @@ module.exports.init = function (app, done) {
             });
         });
 
+        // Check if the user can send to yet another recipient
+        app.addHook('smtp:rcpt_to', (address, session, next) => {
+            if (!checkInterface(session.interface) || !users.has(session)) {
+                return next();
+            }
+            let user = users.get(session);
+
+            if (!user.recipients) {
+                return next();
+            }
+
+            redisClient.eval(recipientsCounter, 1, 'wdr:' + user._id.toString(), 1, user.recipients, (err, res) => {
+                if (err) {
+                    return next(err);
+                }
+
+                let success = !!(res && res[0] || 0);
+                let sent = res && res[1] || 0;
+                let ttl = res && res[2] || 0;
+                let ttlHuman = false;
+                if (ttl) {
+                    if (ttl < 60) {
+                        ttlHuman = ttl + ' seconds';
+                    } else if (ttl < 3600) {
+                        ttlHuman = Math.round(ttl / 60) + ' minutes';
+                    } else {
+                        ttlHuman = Math.round(ttl / 3600) + ' hours';
+                    }
+                }
+
+                if (!success) {
+                    app.logger.info('Sender', '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.', session.envelopeId, address.address, sent, user.recipients, ttl);
+                    let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
+                    err.responseCode = 550;
+                    err.name = 'SMTPResponse';
+                    return setImmediate(() => next(err));
+                }
+
+                app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, user.recipients);
+                next();
+            });
+        });
+
         // Check if an user is allowed to use specific address, if not then override using the default
         app.addHook('message:queue', (envelope, messageInfo, next) => {
             if (!checkInterface(envelope.interface)) {
                 return next();
             }
 
-            getUser(envelope, (err, userData) => {
+            getUser(envelope, (err, user) => {
                 if (err) {
                     return next(err);
                 }
 
-                if (userData.quota && userData.storageUsed > userData.quota) {
+                if (user.quota && user.storageUsed > user.quota) {
                     // skip upload, not enough storage
                     app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
                     return next();
@@ -158,7 +230,7 @@ module.exports.init = function (app, done) {
                 body.once('end', () => {
                     setImmediate(next);
                     messageHandler.add({
-                        user: userData._id,
+                        user: user._id,
                         specialUse: '\\Sent',
 
                         meta: {
@@ -191,8 +263,8 @@ module.exports.init = function (app, done) {
             });
         });
 
-        function checkInterface(iface){
-            if(allInterfaces || interfaces.includes(iface)){
+        function checkInterface(iface) {
+            if (allInterfaces || interfaces.includes(iface)) {
                 return true;
             }
             return false;
@@ -214,7 +286,15 @@ module.exports.init = function (app, done) {
                 return callback(new Error('Insufficient user info'));
             }
 
-            database.collection('users').findOne(query, (err, user) => {
+            database.collection('users').findOne(query, {
+                fields: {
+                    username: true,
+                    address: true,
+                    quota: true,
+                    storageUsed: true,
+                    recipients: true
+                }
+            }, (err, user) => {
                 if (err) {
                     return callback(err);
                 }
