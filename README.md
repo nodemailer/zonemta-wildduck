@@ -10,6 +10,7 @@ Wild Duck actions apply only interfaces that require authentication.
 * **From rewriting** – if the message has a From: address in the header that is not registered as one of the aliases for this user then the address part (but not the name) is rewritten with the default address for this user
 * **Upload to Sent Mail folder** – sent message is automatically appended to the *Sent Mail* folder of the user
 * **Reciepient limiting** – limit RCPT TO calls for 24 hour period based on the *recipients* user value
+* **Local delivery** – messages that are handled current Wild Duck installation are routed directly to LMTP bypassing MX steps
 
 ## Setup
 
