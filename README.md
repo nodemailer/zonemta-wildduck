@@ -31,10 +31,18 @@ Add a configuration entry in the "plugins" section of your ZoneMTA app
   },
   "plugins": {
     "modules/zonemta-wildduck": {
-        "enabled": "receiver",
+        "enabled": ["receiver", "sender"],
         "mongo": "mongodb://127.0.0.1:27017/wildduck",
         "redis": "redis://127.0.0.1:6379/3",
-        "hostname": "mail.wildduck.email"
+        "hostname": "mail.wildduck.email",
+
+        "mxPort": 24,
+        "mx": [{
+            "priority": 0,
+            "exchange": "mail.wildduck.email",
+            "A": ["127.0.0.1"],
+            "AAAA": []
+        }]
     }
   }
 ...
@@ -49,7 +57,11 @@ Where
 
 Optional arguments:
 
-  * **interfaces** is an array of interface names this plugin applies to (eg. `["feeder"]`). This is needed if you have multiple interfaces set up that have different configuration.
+  * **mxPort** – which port to use for local deliveries
+  * **mx** – an array of MX definitions for local deliveries.
+  * **interfaces** - is an array of interface names this plugin applies to (eg. `["feeder"]`). This is needed if you have multiple interfaces set up that have different configuration.
+
+Local deliveries are deliveries to addresses that are handled by active Wild Duck installation. In case of these addresses MX step is ignored and messages are delivered directly to LMTP.
 
 ## License
 

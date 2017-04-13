@@ -309,6 +309,33 @@ return {1, updated};
             });
         }
 
+        if (app.config.mx) {
+            app.addHook('sender:fetch', (delivery, next) => {
+                if (!checkInterface(delivery.interface)) {
+                    return next();
+                }
+
+                database.collection('addresses').findOne({
+                    address: normalizeAddress(delivery.envelope.to)
+                }, (err, addressData) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    if (!addressData) {
+                        // remote recipient
+                        return next();
+                    }
+                    // local recipient
+
+                    delivery.mx = [].concat(app.config.mx || []);
+                    delivery.mxPort = app.config.mxPort;
+                    delivery.useLMTP = true;
+                    next();
+                });
+
+            });
+        }
+
         done();
     });
 };
@@ -365,7 +392,11 @@ function normalizeAddress(address, withNames) {
     if (!address || !address.address) {
         return '';
     }
-    let user = address.address.substr(0, address.address.lastIndexOf('@')).normalize('NFC').toLowerCase().trim();
+    let user = address.address.substr(0, address.address.lastIndexOf('@')).
+    normalize('NFC').
+    replace(/\+.*$/, '').
+    toLowerCase().trim();
+
     let domain = address.address.substr(address.address.lastIndexOf('@') + 1).toLowerCase().trim();
     let addr = user + '@' + punycode.toUnicode(domain);
 
