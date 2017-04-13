@@ -327,6 +327,7 @@ return {1, updated};
                     delivery.mx = [].concat(app.config.mx || []);
                     delivery.mxPort = app.config.mxPort;
                     delivery.useLMTP = true;
+                    delivery.zoneAddress = app.config.zoneAddress;
                     next();
                 });
             });

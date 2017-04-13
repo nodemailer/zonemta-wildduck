@@ -60,6 +60,7 @@ Optional arguments:
 
   * **mxPort** – which port to use for local deliveries
   * **mx** – an array of MX definitions for local deliveries.
+  * **zoneAddress** – an object to set local address for local delivery: `{address: ip, name: hostname}`
   * **interfaces** - is an array of interface names this plugin applies to (eg. `["feeder"]`). This is needed if you have multiple interfaces set up that have different configuration.
 
 Local deliveries are deliveries to addresses that are handled by active Wild Duck installation. In case of these addresses MX step is ignored and messages are delivered directly to LMTP.
