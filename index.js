@@ -311,10 +311,7 @@ return {1, updated};
 
         if (app.config.mx) {
             app.addHook('sender:fetch', (delivery, next) => {
-                if (!checkInterface(delivery.interface)) {
-                    return next();
-                }
-
+                // apply to all sending zones
                 database.collection('addresses').findOne({
                     address: normalizeAddress(delivery.envelope.to)
                 }, (err, addressData) => {
@@ -332,7 +329,6 @@ return {1, updated};
                     delivery.useLMTP = true;
                     next();
                 });
-
             });
         }
 
