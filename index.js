@@ -1,12 +1,12 @@
 'use strict';
 
 const punycode = require('punycode');
-const bcrypt = require('bcryptjs');
 const os = require('os');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const mongodb = require('mongodb');
 const MessageHandler = require('wildduck/lib/message-handler');
+const UserHandler = require('wildduck/lib/user-handler');
 const tools = require('wildduck/lib/tools');
 const redis = require('redis');
 const MongoClient = mongodb.MongoClient;
@@ -41,6 +41,7 @@ return {1, updated};
         }
 
         const messageHandler = new MessageHandler(database);
+        const userHandler = new UserHandler(database);
         const interfaces = [].concat(app.config.interfaces || '*');
         const allInterfaces = interfaces.includes('*');
 
@@ -49,31 +50,18 @@ return {1, updated};
             if (!checkInterface(session.interface)) {
                 return next();
             }
-            let username = (auth.username || '').toString().toLowerCase().trim();
-            let password = auth.password || '';
 
-            database.collection('users').findOne({
-                username
-            }, {
-                fields: {
-                    username: true,
-                    password: true,
-                    recipients: true
-                }
-            }, (err, user) => {
+            userHandler.authenticate(auth.username, auth.password, (err, result) => {
                 if (err) {
                     return next(err);
                 }
-                if (!user || !bcrypt.compareSync(password, user.password)) {
+                if (!result || (result.scope === 'master' && result.enabled2fa)) {
                     err = new Error('Authentication failed');
                     err.responseCode = 535;
                     return next(err);
                 }
 
-                users.set(session, user);
-
-                // consider the authentication as succeeded as we did not get an error
-                auth.username = username;
+                auth.username = result.username;
                 next();
             });
         });
@@ -276,6 +264,7 @@ return {1, updated};
             if (users.has(envelope)) {
                 return callback(null, users.get(envelope));
             }
+
             if (envelope.user) {
                 query = {
                     username: envelope.user
