@@ -51,7 +51,10 @@ return {1, updated};
                 return next();
             }
 
-            userHandler.authenticate(auth.username, auth.password, (err, result) => {
+            userHandler.authenticate(auth.username, auth.password, {
+                protocol: 'SMTP',
+                ip: session.remoteAddress
+            }, (err, result) => {
                 if (err) {
                     return next(err);
                 }
