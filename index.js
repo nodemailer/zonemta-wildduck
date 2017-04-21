@@ -145,41 +145,45 @@ return {1, updated};
             if (!checkInterface(session.interface) || !users.has(session)) {
                 return next();
             }
-            let user = users.get(session);
-
-            if (!user.recipients) {
-                return next();
-            }
-
-            redisClient.eval(recipientsCounter, 1, 'wdr:' + user._id.toString(), 1, user.recipients, (err, res) => {
+            getUser(session, (err, user) => {
                 if (err) {
-                    return next(err);
+                    return next();
                 }
 
-                let success = !!(res && res[0] || 0);
-                let sent = res && res[1] || 0;
-                let ttl = res && res[2] || 0;
-                let ttlHuman = false;
-                if (ttl) {
-                    if (ttl < 60) {
-                        ttlHuman = ttl + ' seconds';
-                    } else if (ttl < 3600) {
-                        ttlHuman = Math.round(ttl / 60) + ' minutes';
-                    } else {
-                        ttlHuman = Math.round(ttl / 3600) + ' hours';
+                if (!user.recipients) {
+                    return next();
+                }
+
+                redisClient.eval(recipientsCounter, 1, 'wdr:' + user._id.toString(), 1, user.recipients, (err, res) => {
+                    if (err) {
+                        return next(err);
                     }
-                }
 
-                if (!success) {
-                    app.logger.info('Sender', '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.', session.envelopeId, address.address, sent, user.recipients, ttl);
-                    let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
-                    err.responseCode = 550;
-                    err.name = 'SMTPResponse';
-                    return setImmediate(() => next(err));
-                }
+                    let success = !!(res && res[0] || 0);
+                    let sent = res && res[1] || 0;
+                    let ttl = res && res[2] || 0;
+                    let ttlHuman = false;
+                    if (ttl) {
+                        if (ttl < 60) {
+                            ttlHuman = ttl + ' seconds';
+                        } else if (ttl < 3600) {
+                            ttlHuman = Math.round(ttl / 60) + ' minutes';
+                        } else {
+                            ttlHuman = Math.round(ttl / 3600) + ' hours';
+                        }
+                    }
 
-                app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, user.recipients);
-                next();
+                    if (!success) {
+                        app.logger.info('Sender', '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.', session.envelopeId, address.address, sent, user.recipients, ttl);
+                        let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
+                        err.responseCode = 550;
+                        err.name = 'SMTPResponse';
+                        return setImmediate(() => next(err));
+                    }
+
+                    app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, user.recipients);
+                    next();
+                });
             });
         });
 
