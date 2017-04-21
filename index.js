@@ -41,7 +41,7 @@ return {1, updated};
         }
 
         const messageHandler = new MessageHandler(database);
-        const userHandler = new UserHandler(database);
+        const userHandler = new UserHandler(database, redisClient);
         const interfaces = [].concat(app.config.interfaces || '*');
         const allInterfaces = interfaces.includes('*');
 
