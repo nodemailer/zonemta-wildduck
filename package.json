@@ -1,6 +1,6 @@
 {
   "name": "zonemta-wildduck",
-  "version": "1.3.3",
+  "version": "1.3.4",
   "description": "Wild Duck MSA plugin for ZoneMTA",
   "main": "index.js",
   "author": "Andris Reinman",
@@ -13,7 +13,7 @@
     "mongodb": "^2.2.26",
     "nodemailer": "^4.0.1",
     "redis": "^2.7.1",
-    "wildduck": "^1.0.18"
+    "wildduck": "^1.0.19"
   },
   "devDependencies": {
     "eslint-config-nodemailer": "^1.0.0",
