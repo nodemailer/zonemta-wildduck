@@ -142,7 +142,7 @@ return {1, updated};
 
         // Check if the user can send to yet another recipient
         app.addHook('smtp:rcpt_to', (address, session, next) => {
-            if (!checkInterface(session.interface) || !users.has(session)) {
+            if (!checkInterface(session.interface)) {
                 return next();
             }
             getUser(session, (err, user) => {
