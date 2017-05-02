@@ -7,41 +7,32 @@ const MimeNode = require('nodemailer/lib/mime-node');
 const mongodb = require('mongodb');
 const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
+const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const redis = require('redis');
+const SRS = require('srs.js');
 const MongoClient = mongodb.MongoClient;
 
 module.exports.title = 'Wild Duck MSA';
 module.exports.init = function (app, done) {
 
     const users = new WeakMap();
-    const redisClient = redis.createClient(tools.redisConfig(app.config.redis));
-
-    const recipientsCounter = `
-local increment = tonumber(ARGV[1]) or 0;
-local limit = tonumber(ARGV[2]) or 0;
-local current = tonumber(redis.call("GET", KEYS[1])) or 0;
-
-if current + increment > limit then
-    local ttl = tonumber(redis.call("TTL", KEYS[1])) or 0;
-    return {0, current, ttl};
-end;
-
-local updated = tonumber(redis.call("INCRBY", KEYS[1], increment));
-if current == 0 then
-    redis.call("EXPIRE", KEYS[1], 86400);
-end;
-
-return {1, updated};
-`;
+    const redisConfig = tools.redisConfig(app.config.redis);
+    const redisClient = redis.createClient(redisConfig);
+    const ttlcounter = counters(redisClient);
 
     MongoClient.connect(app.config.mongo, (err, database) => {
         if (err) {
             return done(err);
         }
 
-        const messageHandler = new MessageHandler(database);
+        const srsRewriter = new SRS({
+            secret: app.config.secret
+        });
+
+        const messageHandler = new MessageHandler(database, redisConfig);
         const userHandler = new UserHandler(database, redisClient);
+
         const interfaces = [].concat(app.config.interfaces || '*');
         const allInterfaces = interfaces.includes('*');
 
@@ -157,14 +148,15 @@ return {1, updated};
                     return next();
                 }
 
-                redisClient.eval(recipientsCounter, 1, 'wdr:' + user._id.toString(), 1, user.recipients, (err, res) => {
+                ttlcounter('wdr:' + user._id.toString(), 1, user.recipients, (err, result) => {
                     if (err) {
                         return next(err);
                     }
 
-                    let success = !!(res && res[0] || 0);
-                    let sent = res && res[1] || 0;
-                    let ttl = res && res[2] || 0;
+                    let success = result.success;
+                    let sent = result.value;
+                    let ttl = result.ttl;
+
                     let ttlHuman = false;
                     if (ttl) {
                         if (ttl < 60) {
@@ -256,6 +248,30 @@ return {1, updated};
                     });
                 });
             });
+        });
+
+        app.addHook('sender:headers', (delivery, connection, next) => {
+            if (!delivery.envelope.from || delivery.interface !== app.config.forwarder) {
+                return next();
+            }
+
+            let from = delivery.envelope.from || '';
+
+            let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
+            let srsDomain = app.config.rewriteDomain;
+
+            delivery.headers.add('X-Original-Sender', from, Infinity);
+            delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
+            delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
+            try {
+                delivery.envelope.from = srsRewriter
+                    .rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
+            } catch (E) {
+                // failed rewriting address, keep as is
+                app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
+            }
+
+            next();
         });
 
         function checkInterface(iface) {
