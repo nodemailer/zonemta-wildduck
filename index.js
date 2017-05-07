@@ -19,7 +19,7 @@ module.exports.init = function (app, done) {
     const users = new WeakMap();
     const redisConfig = tools.redisConfig(app.config.redis);
     const redisClient = redis.createClient(redisConfig);
-    const ttlcounter = counters(redisClient);
+    const ttlcounter = counters(redisClient).ttlcounter;
 
     MongoClient.connect(app.config.mongo, (err, database) => {
         if (err) {
