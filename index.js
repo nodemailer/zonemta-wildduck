@@ -52,6 +52,7 @@ module.exports.init = function (app, done) {
                 if (!result || (result.scope === 'master' && result.enabled2fa)) {
                     err = new Error('Authentication failed');
                     err.responseCode = 535;
+                    err.name = 'SMTPResponse'; // do not throw
                     return next(err);
                 }
 
