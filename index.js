@@ -1,6 +1,5 @@
 'use strict';
 
-const punycode = require('punycode');
 const os = require('os');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
@@ -14,8 +13,7 @@ const SRS = require('srs.js');
 const MongoClient = mongodb.MongoClient;
 
 module.exports.title = 'Wild Duck MSA';
-module.exports.init = function (app, done) {
-
+module.exports.init = function(app, done) {
     const users = new WeakMap();
     const redisConfig = tools.redisConfig(app.config.redis);
     const redisClient = redis.createClient(redisConfig);
@@ -30,7 +28,7 @@ module.exports.init = function (app, done) {
             secret: app.config.secret
         });
 
-        const messageHandler = new MessageHandler(database, redisConfig);
+        const messageHandler = new MessageHandler(database, redisClient);
         const userHandler = new UserHandler(database, redisClient);
 
         const interfaces = [].concat(app.config.interfaces || '*');
@@ -42,23 +40,29 @@ module.exports.init = function (app, done) {
                 return next();
             }
 
-            userHandler.authenticate(auth.username, auth.password, {
-                protocol: 'SMTP',
-                ip: session.remoteAddress
-            }, (err, result) => {
-                if (err) {
-                    return next(err);
-                }
-                if (!result || (result.scope === 'master' && result.enabled2fa)) {
-                    err = new Error('Authentication failed');
-                    err.responseCode = 535;
-                    err.name = 'SMTPResponse'; // do not throw
-                    return next(err);
-                }
+            userHandler.authenticate(
+                auth.username,
+                auth.password,
+                'smtp',
+                {
+                    protocol: 'SMTP',
+                    ip: session.remoteAddress
+                },
+                (err, result) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    if (!result || (result.scope === 'master' && result.require2fa)) {
+                        err = new Error('Authentication failed');
+                        err.responseCode = 535;
+                        err.name = 'SMTPResponse'; // do not throw
+                        return next(err);
+                    }
 
-                auth.username = result.username;
-                next();
-            });
+                    auth.username = result.username;
+                    next();
+                }
+            );
         });
 
         // Check if an user is allowed to use specific address, if not then override using the default
@@ -88,17 +92,23 @@ module.exports.init = function (app, done) {
                 }
 
                 database.collection('addresses').findOne({
-                    address: normalizeAddress(envelope.from),
+                    address: tools.normalizeAddress(envelope.from),
                     user: user._id
                 }, (err, addressData) => {
-
                     if (err) {
                         return next(err);
                     }
 
                     if (!addressData) {
                         // replace MAIL FROM address
-                        app.logger.info('Rewrite', '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"', envelope.id, user.username, envelope.from, user.address);
+                        app.logger.info(
+                            'Rewrite',
+                            '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
+                            envelope.id,
+                            user.username,
+                            envelope.from,
+                            user.address
+                        );
                         envelope.from = user.address;
                     }
 
@@ -107,7 +117,7 @@ module.exports.init = function (app, done) {
                     }
 
                     database.collection('addresses').findOne({
-                        address: normalizeAddress(headerFromObj.address),
+                        address: tools.normalizeAddress(headerFromObj.address),
                         user: user._id
                     }, (err, addressData) => {
                         if (err) {
@@ -119,7 +129,14 @@ module.exports.init = function (app, done) {
                             return next();
                         }
 
-                        app.logger.info('Rewrite', '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"', envelope.id, user.username, headerFromObj.address, envelope.from);
+                        app.logger.info(
+                            'Rewrite',
+                            '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
+                            envelope.id,
+                            user.username,
+                            headerFromObj.address,
+                            envelope.from
+                        );
 
                         headerFromObj.address = envelope.from;
 
@@ -170,7 +187,15 @@ module.exports.init = function (app, done) {
                     }
 
                     if (!success) {
-                        app.logger.info('Sender', '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.', session.envelopeId, address.address, sent, user.recipients, ttl);
+                        app.logger.info(
+                            'Sender',
+                            '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.',
+                            session.envelopeId,
+                            address.address,
+                            sent,
+                            user.recipients,
+                            ttl
+                        );
                         let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
                         err.responseCode = 550;
                         err.name = 'SMTPResponse';
@@ -217,36 +242,39 @@ module.exports.init = function (app, done) {
                 body.once('error', err => next(err));
                 body.once('end', () => {
                     setImmediate(next);
-                    messageHandler.add({
-                        user: user._id,
-                        specialUse: '\\Sent',
+                    messageHandler.add(
+                        {
+                            user: user._id,
+                            specialUse: '\\Sent',
 
-                        meta: {
-                            source: 'SMTP',
-                            from: envelope.from,
-                            to: envelope.to,
-                            origin: envelope.remoteAddress,
-                            originhost: envelope.clientHostname,
-                            transhost: envelope.hostNameAppearsAs,
-                            transtype: envelope.transmissionType,
-                            time: Date.now()
+                            meta: {
+                                source: 'SMTP',
+                                from: envelope.from,
+                                to: envelope.to,
+                                origin: envelope.remoteAddress,
+                                originhost: envelope.clientHostname,
+                                transhost: envelope.hostNameAppearsAs,
+                                transtype: envelope.transmissionType,
+                                time: Date.now()
+                            },
+
+                            date: false,
+                            flags: ['\\Seen'],
+                            raw: Buffer.concat(chunks, chunklen),
+
+                            // if similar message exists, then skip
+                            skipExisting: true
                         },
-
-                        date: false,
-                        flags: ['\\Seen'],
-                        raw: Buffer.concat(chunks, chunklen),
-
-                        // if similar message exists, then skip
-                        skipExisting: true
-                    }, (err, success, info) => {
-                        if (err) {
-                            app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
-                        } else if (info) {
-                            app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
-                        } else {
-                            app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                        (err, success, info) => {
+                            if (err) {
+                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
+                            } else if (info) {
+                                app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
+                            } else {
+                                app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                            }
                         }
-                    });
+                    );
                 });
             });
         });
@@ -265,8 +293,7 @@ module.exports.init = function (app, done) {
             delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
             delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
             try {
-                delivery.envelope.from = srsRewriter
-                    .rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
+                delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
             } catch (E) {
                 // failed rewriting address, keep as is
                 app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
@@ -326,7 +353,7 @@ module.exports.init = function (app, done) {
             app.addHook('sender:fetch', (delivery, next) => {
                 // apply to all sending zones
                 database.collection('addresses').findOne({
-                    address: normalizeAddress(delivery.envelope.to)
+                    address: tools.normalizeAddress(delivery.envelope.to)
                 }, (err, addressData) => {
                     if (err) {
                         return next(err);
@@ -362,60 +389,34 @@ function generateReceivedHeader(envelope, hostname) {
         origin = origin.join(' ').trim() || 'localhost';
     }
 
-    let value = '' +
+    let value =
+        '' +
         // from ehlokeyword
-        'from' + (envelope.transhost ? ' ' + envelope.transhost : '') +
+        'from' +
+        (envelope.transhost ? ' ' + envelope.transhost : '') +
         // [1.2.3.4]
-        ' ' + origin +
+        ' ' +
+        origin +
         (originhost ? '\r\n' : '') +
-
         // (Authenticated sender: username)
-        (envelope.user ? ' (Authenticated sender: ' + envelope.user + ')\r\n' : (!originhost ? '\r\n' : '')) +
-
+        (envelope.user ? ' (Authenticated sender: ' + envelope.user + ')\r\n' : !originhost ? '\r\n' : '') +
         // by smtphost
-        ' by ' + hostname +
+        ' by ' +
+        hostname +
         // with ESMTP
-        ' with ' + envelope.transtype +
+        ' with ' +
+        envelope.transtype +
         // id 12345678
-        ' id ' + envelope.id +
-
+        ' id ' +
+        envelope.id +
         // for <receiver@example.com>
         (envelope.to.length === 1 ? '\r\n for <' + envelope.to[0] + '>' : '') +
-
         // (version=TLSv1/SSLv3 cipher=ECDHE-RSA-AES128-GCM-SHA256)
         (envelope.tls ? '\r\n (version=' + envelope.tls.version + ' cipher=' + envelope.tls.name + ')' : '') +
-
         ';' +
         '\r\n' +
-
         // Wed, 03 Aug 2016 11:32:07 +0000
-        ' ' + new Date(envelope.time).toUTCString().replace(/GMT/, '+0000');
+        ' ' +
+        new Date(envelope.time).toUTCString().replace(/GMT/, '+0000');
     return key + ': ' + value;
-}
-
-function normalizeAddress(address, withNames) {
-    if (typeof address === 'string') {
-        address = {
-            address
-        };
-    }
-    if (!address || !address.address) {
-        return '';
-    }
-    let user = address.address.substr(0, address.address.lastIndexOf('@')).
-    normalize('NFC').
-    replace(/\+.*$/, '').
-    toLowerCase().trim();
-
-    let domain = address.address.substr(address.address.lastIndexOf('@') + 1).toLowerCase().trim();
-    let addr = user + '@' + punycode.toUnicode(domain);
-
-    if (withNames) {
-        return {
-            name: address.name || '',
-            address: addr
-        };
-    }
-
-    return addr;
 }
