@@ -14,7 +14,7 @@
         "nodemailer": "^4.0.1",
         "redis": "^2.7.1",
         "srs.js": "^0.1.0",
-        "wildduck": "^1.0.57"
+        "wildduck": "^1.0.58"
     },
     "devDependencies": {
         "eslint-config-nodemailer": "^1.2.0",
