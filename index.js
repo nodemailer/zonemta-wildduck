@@ -28,8 +28,19 @@ module.exports.init = function(app, done) {
             secret: app.config.secret
         });
 
-        const messageHandler = new MessageHandler(database, redisClient);
-        const userHandler = new UserHandler(database, redisClient);
+        const messageHandler = new MessageHandler({
+            database,
+            redis: redisClient,
+            gridfs: app.config.gridfs ? database.db(app.config.gridfs) : database,
+            users: app.config.users ? database.db(app.config.users) : database
+        });
+
+        const userHandler = new UserHandler({
+            database,
+            redis: redisClient,
+            gridfs: app.config.gridfs ? database.db(app.config.gridfs) : database,
+            users: app.config.users ? database.db(app.config.users) : database
+        });
 
         const interfaces = [].concat(app.config.interfaces || '*');
         const allInterfaces = interfaces.includes('*');

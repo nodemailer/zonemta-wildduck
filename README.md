@@ -34,8 +34,13 @@ Add a configuration entry in the "plugins" section of your ZoneMTA app
     "modules/zonemta-wildduck": {
         "enabled": ["receiver", "sender"],
         "mongo": "mongodb://127.0.0.1:27017/wildduck",
+        "users": "wildduck",
+        "gridfs": "wildduck",
         "redis": "redis://127.0.0.1:6379/3",
         "hostname": "mail.wildduck.email",
+
+        "secret": "abcdef",
+        "rewriteDomain": "example.com",
 
         "mxPort": 24,
         "mx": [{
