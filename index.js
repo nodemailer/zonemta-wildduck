@@ -105,70 +105,64 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
 
-                usersdb('addresses').findOne(
-                    {
-                        address: tools.normalizeAddress(envelope.from),
+                usersdb.collection('addresses').findOne({
+                    address: tools.normalizeAddress(envelope.from),
+                    user: user._id
+                }, (err, addressData) => {
+                    if (err) {
+                        return next(err);
+                    }
+
+                    if (!addressData) {
+                        // replace MAIL FROM address
+                        app.logger.info(
+                            'Rewrite',
+                            '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
+                            envelope.id,
+                            user.username,
+                            envelope.from,
+                            user.address
+                        );
+                        envelope.from = user.address;
+                    }
+
+                    if (!headerFromObj) {
+                        return next();
+                    }
+
+                    usersdb.collection('addresses').findOne({
+                        address: tools.normalizeAddress(headerFromObj.address),
                         user: user._id
-                    },
-                    (err, addressData) => {
+                    }, (err, addressData) => {
                         if (err) {
                             return next(err);
                         }
 
-                        if (!addressData) {
-                            // replace MAIL FROM address
-                            app.logger.info(
-                                'Rewrite',
-                                '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
-                                envelope.id,
-                                user.username,
-                                envelope.from,
-                                user.address
-                            );
-                            envelope.from = user.address;
-                        }
-
-                        if (!headerFromObj) {
+                        if (addressData) {
+                            // can send mail as this user
                             return next();
                         }
 
-                        usersdb('addresses').findOne(
-                            {
-                                address: tools.normalizeAddress(headerFromObj.address),
-                                user: user._id
-                            },
-                            (err, addressData) => {
-                                if (err) {
-                                    return next(err);
-                                }
-
-                                if (addressData) {
-                                    // can send mail as this user
-                                    return next();
-                                }
-
-                                app.logger.info(
-                                    'Rewrite',
-                                    '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
-                                    envelope.id,
-                                    user.username,
-                                    headerFromObj.address,
-                                    envelope.from
-                                );
-
-                                headerFromObj.address = envelope.from;
-
-                                let rootNode = new MimeNode();
-                                let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
-
-                                envelope.headers.update('From', newHeaderFrom);
-                                envelope.headers.update('X-WildDuck-Original-From', headerFrom);
-
-                                next();
-                            }
+                        app.logger.info(
+                            'Rewrite',
+                            '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
+                            envelope.id,
+                            user.username,
+                            headerFromObj.address,
+                            envelope.from
                         );
-                    }
-                );
+
+                        headerFromObj.address = envelope.from;
+
+                        let rootNode = new MimeNode();
+                        let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
+
+                        envelope.headers.update('From', newHeaderFrom);
+                        envelope.headers.update('X-WildDuck-Original-From', headerFrom);
+
+                        next();
+                    });
+                });
             });
         });
 
@@ -346,57 +340,50 @@ module.exports.init = function(app, done) {
                 return callback(new Error('Insufficient user info'));
             }
 
-            usersdb('users').findOne(
-                query,
-                {
-                    fields: {
-                        username: true,
-                        address: true,
-                        quota: true,
-                        storageUsed: true,
-                        recipients: true
-                    }
-                },
-                (err, user) => {
-                    if (err) {
-                        return callback(err);
-                    }
-
-                    if (!user) {
-                        return callback(new Error('User "' + query.username + '" was not found'));
-                    }
-
-                    users.set(envelope, user);
-
-                    return callback(null, user);
+            usersdb.collection('users').findOne(query, {
+                fields: {
+                    username: true,
+                    address: true,
+                    quota: true,
+                    storageUsed: true,
+                    recipients: true
                 }
-            );
+            }, (err, user) => {
+                if (err) {
+                    return callback(err);
+                }
+
+                if (!user) {
+                    return callback(new Error('User "' + query.username + '" was not found'));
+                }
+
+                users.set(envelope, user);
+
+                return callback(null, user);
+            });
         }
 
         if (app.config.mx) {
             app.addHook('sender:fetch', (delivery, next) => {
                 // apply to all sending zones
-                usersdb('addresses').findOne(
-                    {
-                        address: tools.normalizeAddress(delivery.envelope.to)
-                    },
-                    (err, addressData) => {
-                        if (err) {
-                            return next(err);
-                        }
-                        if (!addressData) {
-                            // remote recipient
-                            return next();
-                        }
-                        // local recipient
-
-                        delivery.mx = [].concat(app.config.mx || []);
-                        delivery.mxPort = app.config.mxPort;
-                        delivery.useLMTP = true;
-                        delivery.zoneAddress = app.config.zoneAddress;
-                        next();
+                usersdb.collection('addresses').findOne({
+                    address: tools.normalizeAddress(delivery.envelope.to)
+                }, (err, addressData) => {
+                    if (err) {
+                        return next(err);
                     }
-                );
+                    if (!addressData) {
+                        // remote recipient
+                        return next();
+                    }
+                    // local recipient
+
+                    delivery.mx = [].concat(app.config.mx || []);
+                    delivery.mxPort = app.config.mxPort;
+                    delivery.useLMTP = true;
+                    delivery.zoneAddress = app.config.zoneAddress;
+                    next();
+                });
             });
         }
 
