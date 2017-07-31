@@ -105,8 +105,14 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
 
+                let normalizedAddress;
+
+                normalizedAddress = tools.normalizeAddress(envelope.from);
+                normalizedAddress =
+                    normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
                 usersdb.collection('addresses').findOne({
-                    address: tools.normalizeAddress(envelope.from),
+                    addrview: normalizedAddress,
                     user: user._id
                 }, (err, addressData) => {
                     if (err) {
@@ -130,8 +136,12 @@ module.exports.init = function(app, done) {
                         return next();
                     }
 
+                    normalizedAddress = tools.normalizeAddress(headerFromObj.address);
+                    normalizedAddress =
+                        normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') +
+                        normalizedAddress.substr(normalizedAddress.indexOf('@'));
                     usersdb.collection('addresses').findOne({
-                        address: tools.normalizeAddress(headerFromObj.address),
+                        addrview: normalizedAddress,
                         user: user._id
                     }, (err, addressData) => {
                         if (err) {
@@ -365,9 +375,14 @@ module.exports.init = function(app, done) {
 
         if (app.config.mx) {
             app.addHook('sender:fetch', (delivery, next) => {
-                // apply to all sending zones
+                let normalizedAddress;
+
+                normalizedAddress = tools.normalizeAddress(delivery.envelope.to);
+                normalizedAddress =
+                    normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
                 usersdb.collection('addresses').findOne({
-                    address: tools.normalizeAddress(delivery.envelope.to)
+                    addrview: normalizedAddress
                 }, (err, addressData) => {
                     if (err) {
                         return next(err);
