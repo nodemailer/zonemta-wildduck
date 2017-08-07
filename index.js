@@ -34,8 +34,12 @@ module.exports.init = function(app, done) {
         const messageHandler = new MessageHandler({
             database,
             redis: redisClient,
+            users: usersdb,
             gridfs: gridfsdb,
-            users: usersdb
+            attachments: app.config.attachments || {
+                type: 'gridstore',
+                bucket: 'attachments'
+            }
         });
 
         const userHandler = new UserHandler({
