@@ -104,7 +104,7 @@ module.exports.init = function(app, done) {
                 }
             }
 
-            getUser(envelope, (err, user) => {
+            getUser(envelope, (err, userData) => {
                 if (err) {
                     return next(err);
                 }
@@ -117,7 +117,7 @@ module.exports.init = function(app, done) {
 
                 usersdb.collection('addresses').findOne({
                     addrview: normalizedAddress,
-                    user: user._id
+                    user: userData._id
                 }, (err, addressData) => {
                     if (err) {
                         return next(err);
@@ -129,11 +129,11 @@ module.exports.init = function(app, done) {
                             'Rewrite',
                             '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
                             envelope.id,
-                            user.username,
+                            userData.username,
                             envelope.from,
-                            user.address
+                            userData.address
                         );
-                        envelope.from = user.address;
+                        envelope.from = userData.address;
                     }
 
                     if (!headerFromObj) {
@@ -146,7 +146,7 @@ module.exports.init = function(app, done) {
                         normalizedAddress.substr(normalizedAddress.indexOf('@'));
                     usersdb.collection('addresses').findOne({
                         addrview: normalizedAddress,
-                        user: user._id
+                        user: userData._id
                     }, (err, addressData) => {
                         if (err) {
                             return next(err);
@@ -161,7 +161,7 @@ module.exports.init = function(app, done) {
                             'Rewrite',
                             '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
                             envelope.id,
-                            user.username,
+                            userData.username,
                             headerFromObj.address,
                             envelope.from
                         );
@@ -185,16 +185,16 @@ module.exports.init = function(app, done) {
             if (!checkInterface(session.interface)) {
                 return next();
             }
-            getUser(session, (err, user) => {
+            getUser(session, (err, userData) => {
                 if (err) {
                     return next();
                 }
 
-                if (!user.recipients) {
+                if (!userData.recipients) {
                     return next();
                 }
 
-                ttlcounter('wdr:' + user._id.toString(), 1, user.recipients, (err, result) => {
+                ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, (err, result) => {
                     if (err) {
                         return next(err);
                     }
@@ -221,7 +221,7 @@ module.exports.init = function(app, done) {
                             session.envelopeId,
                             address.address,
                             sent,
-                            user.recipients,
+                            userData.recipients,
                             ttl
                         );
                         let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
@@ -230,7 +230,7 @@ module.exports.init = function(app, done) {
                         return setImmediate(() => next(err));
                     }
 
-                    app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, user.recipients);
+                    app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
                     next();
                 });
             });
@@ -242,12 +242,12 @@ module.exports.init = function(app, done) {
                 return next();
             }
 
-            getUser(envelope, (err, user) => {
+            getUser(envelope, (err, userData) => {
                 if (err) {
                     return next(err);
                 }
 
-                if (user.quota && user.storageUsed > user.quota) {
+                if (userData.quota && userData.storageUsed > userData.quota) {
                     // skip upload, not enough storage
                     app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
                     return next();
@@ -269,40 +269,53 @@ module.exports.init = function(app, done) {
                 });
                 body.once('error', err => next(err));
                 body.once('end', () => {
+                    // Next we try to upload the message to Sent Mail folder
+                    // It doesn't really matter if it succeeds or not so we are not waiting until it's done
                     setImmediate(next);
-                    messageHandler.add(
-                        {
-                            user: user._id,
-                            specialUse: '\\Sent',
 
-                            meta: {
-                                source: 'SMTP',
-                                from: envelope.from,
-                                to: envelope.to,
-                                origin: envelope.remoteAddress,
-                                originhost: envelope.clientHostname,
-                                transhost: envelope.hostNameAppearsAs,
-                                transtype: envelope.transmissionType,
-                                time: Date.now()
-                            },
+                    let raw = Buffer.concat(chunks, chunklen);
 
-                            date: false,
-                            flags: ['\\Seen'],
-                            raw: Buffer.concat(chunks, chunklen),
-
-                            // if similar message exists, then skip
-                            skipExisting: true
-                        },
-                        (err, success, info) => {
-                            if (err) {
-                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
-                            } else if (info) {
-                                app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
-                            } else {
-                                app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
-                            }
+                    // Checks if the message needs to be encrypted before storing it
+                    messageHandler.encryptMessage(userData.encryptMessages ? userData.pubKey : false, raw, (err, encrypted) => {
+                        if (!err && encrypted) {
+                            // message was encrypted, so use the result instead of raw
+                            raw = encrypted;
                         }
-                    );
+
+                        messageHandler.add(
+                            {
+                                user: userData._id,
+                                specialUse: '\\Sent',
+
+                                meta: {
+                                    source: 'SMTP',
+                                    from: envelope.from,
+                                    to: envelope.to,
+                                    origin: envelope.remoteAddress,
+                                    originhost: envelope.clientHostname,
+                                    transhost: envelope.hostNameAppearsAs,
+                                    transtype: envelope.transmissionType,
+                                    time: Date.now()
+                                },
+
+                                date: false,
+                                flags: ['\\Seen'],
+                                raw,
+
+                                // if similar message exists, then skip
+                                skipExisting: true
+                            },
+                            (err, success, info) => {
+                                if (err) {
+                                    app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
+                                } else if (info) {
+                                    app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
+                                } else {
+                                    app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                                }
+                            }
+                        );
+                    });
                 });
             });
         });
@@ -360,7 +373,9 @@ module.exports.init = function(app, done) {
                     address: true,
                     quota: true,
                     storageUsed: true,
-                    recipients: true
+                    recipients: true,
+                    encryptMessages: true,
+                    pubKey: true
                 }
             }, (err, user) => {
                 if (err) {
