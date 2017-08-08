@@ -195,7 +195,7 @@ module.exports.init = function(app, done) {
                     return next();
                 }
 
-                ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, (err, result) => {
+                ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, false, (err, result) => {
                     if (err) {
                         return next(err);
                     }
