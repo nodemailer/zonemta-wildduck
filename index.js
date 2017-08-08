@@ -46,7 +46,8 @@ module.exports.init = function(app, done) {
             database,
             redis: redisClient,
             gridfs: gridfsdb,
-            users: usersdb
+            users: usersdb,
+            authlogExpireDays: app.config.authlogExpireDays
         });
 
         const interfaces = [].concat(app.config.interfaces || '*');

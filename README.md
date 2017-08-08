@@ -41,6 +41,7 @@ Add a configuration entry in the "plugins" section of your ZoneMTA app
 
         "secret": "abcdef",
         "rewriteDomain": "example.com",
+        "authlogExpireDays": 30
 
         "mxPort": 24,
         "mx": [{
