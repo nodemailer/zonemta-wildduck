@@ -12,9 +12,9 @@
         "bcryptjs": "^2.4.3",
         "mongodb": "^2.2.30",
         "nodemailer": "^4.0.1",
-        "redis": "^2.7.1",
+        "redis": "^2.8.0",
         "srs.js": "^0.1.0",
-        "wildduck": "^1.0.67"
+        "wildduck": "^1.0.68"
     },
     "devDependencies": {
         "eslint-config-nodemailer": "^1.2.0",
