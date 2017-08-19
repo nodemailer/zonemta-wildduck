@@ -22,52 +22,60 @@ npm install zonemta-wildduck --save
 
 Add a configuration entry in the "plugins" section of your ZoneMTA app
 
-```json
-...
-  "smtpInterfaces": {
-    "feeder": {
-      "authentication": true
-      ...
-    }
-  },
-  "plugins": {
-    "modules/zonemta-wildduck": {
-        "enabled": ["receiver", "sender"],
-        "mongo": "mongodb://127.0.0.1:27017/wildduck",
-        "users": "wildduck",
-        "gridfs": "wildduck",
-        "redis": "redis://127.0.0.1:6379/3",
-        "hostname": "mail.wildduck.email",
+First enable authentication for the SMTP interface
 
-        "secret": "abcdef",
-        "rewriteDomain": "example.com",
-        "authlogExpireDays": 30
-
-        "mxPort": 24,
-        "mx": [{
-            "priority": 0,
-            "exchange": "mail.wildduck.email",
-            "A": ["127.0.0.1"],
-            "AAAA": []
-        }]
-    }
-  }
-...
+```toml
+# interfaces.toml
+[feeder]
+authentication=true
+port=587
 ```
 
-Where
+Then set up configuration for this plugin
 
-  * **enabled** states which ZoneMTA processes should use this plugin. Should be "receiver"
-  * **mongo** is the connection string for the Wild Duck IMAP database
-  * **redis** is the connection string for the Wild Duck Redis database
-  * **hostname** is the name to use in Received headers for uploaded messages
+```toml
+# plugins/wildduck.toml
+["modules/zonemta-wildduck"]
+enabled=["receiver", "sender"]
 
-Optional arguments:
+# which interfaces this plugin applies to
+interfaces=["feeder"]
 
-  * **mxPort** – which port to use for local deliveries
-  * **mx** – an array of MX definitions for local deliveries.
-  * **zoneAddress** – an object to set local address for local delivery: `{address: ip, name: hostname}`
-  * **interfaces** - is an array of interface names this plugin applies to (eg. `["feeder"]`). This is needed if you have multiple interfaces set up that have different configuration.
+# optional hostname to be used in headers
+# defaults to os.hostname()
+hostname="example.com"
+
+# How long to keep auth records in log
+authlogExpireDays=30
+
+# SRS settings for forwarded emails
+
+# Handle rewriting of forwarded emails
+forwardedSRS=true
+# SRS secret value. Must be the same as in the MX side
+secret="secret value"
+# SRS domain, must resolve back to MX
+rewriteDomain="example.com"
+
+# Delivery settings for local messages
+# do not set these values if you do not want to use local delivery
+
+# Use LMTP instead of SMTP
+localLmtp=true
+localMxPort=24
+# SMTP/LMTP server for local delivery
+[["modules/zonemta-wildduck".localMx]]
+    priority=0
+    # hostname is for logging only, IP is actually used
+    exchange="example.com"
+    A=["127.0.0.1"]
+    AAAA=[]
+# Interface to be used for local delivery
+# Make sure that it can connect to the localMX IP
+["modules/zonemta-wildduck".localZoneAddress]
+    address="127.0.0.1"
+    name="example.com"
+```
 
 Local deliveries are deliveries to addresses that are handled by active Wild Duck installation. In case of these addresses MX step is ignored and messages are delivered directly to LMTP.
 
