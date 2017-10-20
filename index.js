@@ -65,7 +65,11 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
                 if (!result || (result.scope === 'master' && result.require2fa)) {
-                    err = new Error('Authentication failed');
+                    let message = 'Authentication failed';
+                    if (result) {
+                        message = 'You need to use an application specific password';
+                    }
+                    err = new Error(message);
                     err.responseCode = 535;
                     err.name = 'SMTPResponse'; // do not throw
                     return next(err);
@@ -280,14 +284,16 @@ module.exports.init = function(app, done) {
                             user: userData._id,
                             specialUse: '\\Sent',
 
+                            outbound: envelope.id,
+
                             meta: {
                                 source: 'SMTP',
                                 from: envelope.from,
                                 to: envelope.to,
-                                origin: envelope.remoteAddress,
-                                originhost: envelope.clientHostname,
-                                transhost: envelope.hostNameAppearsAs,
-                                transtype: envelope.transmissionType,
+                                origin: envelope.origin,
+                                originhost: envelope.originhost,
+                                transhost: envelope.transhost,
+                                transtype: envelope.transtype,
                                 time: Date.now()
                             },
 
@@ -350,6 +356,11 @@ module.exports.init = function(app, done) {
 
             next();
         });
+    });
+
+    app.addHook('log:entry', (entry, next) => {
+        entry.created = new Date();
+        database.collection('messagelog').insertOne(entry, () => next());
     });
 
     function checkInterface(iface) {
