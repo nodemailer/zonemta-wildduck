@@ -109,7 +109,7 @@ module.exports.init = function(app, done) {
 
             let normalizedAddress;
 
-            normalizedAddress = tools.normalizeAddress(Buffer.from(envelope.from, 'binary').toString());
+            normalizedAddress = tools.normalizeAddress(envelope.from);
             normalizedAddress =
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
@@ -128,7 +128,7 @@ module.exports.init = function(app, done) {
                         '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
                         envelope.id,
                         userData.username,
-                        envelope.from,
+                        envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
                         userData.address
                     );
                     envelope.from = userData.address;
@@ -138,9 +138,15 @@ module.exports.init = function(app, done) {
                     return next();
                 }
 
-                normalizedAddress = tools.normalizeAddress(headerFromObj.address);
+                normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
                 normalizedAddress =
                     normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
+                if (addressData && addressData.addrview === normalizedAddress) {
+                    // same address
+                    return next();
+                }
+
                 usersdb.collection('addresses').findOne({
                     addrview: normalizedAddress,
                     user: userData._id
@@ -159,7 +165,7 @@ module.exports.init = function(app, done) {
                         '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
                         envelope.id,
                         userData.username,
-                        headerFromObj.address,
+                        headerFromObj.address + (headerFromObj.address === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
                         envelope.from
                     );
 
@@ -294,7 +300,7 @@ module.exports.init = function(app, done) {
                                 originhost: envelope.originhost,
                                 transhost: envelope.transhost,
                                 transtype: envelope.transtype,
-                                time: Date.now()
+                                time: new Date()
                             },
 
                             date: false,
