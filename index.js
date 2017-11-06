@@ -109,7 +109,7 @@ module.exports.init = function(app, done) {
 
             let normalizedAddress;
 
-            normalizedAddress = tools.normalizeAddress(envelope.from);
+            normalizedAddress = tools.normalizeAddress(Buffer.from(envelope.from, 'binary').toString());
             normalizedAddress =
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
