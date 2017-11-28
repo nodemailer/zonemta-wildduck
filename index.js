@@ -113,73 +113,80 @@ module.exports.init = function(app, done) {
             normalizedAddress =
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
-            usersdb.collection('addresses').findOne({
-                addrview: normalizedAddress,
-                user: userData._id
-            }, (err, addressData) => {
-                if (err) {
-                    return next(err);
-                }
-
-                if (!addressData) {
-                    // replace MAIL FROM address
-                    app.logger.info(
-                        'Rewrite',
-                        '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
-                        envelope.id,
-                        userData.username,
-                        envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
-                        userData.address
-                    );
-                    envelope.from = userData.address;
-                }
-
-                if (!headerFromObj) {
-                    return next();
-                }
-
-                normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
-                normalizedAddress =
-                    normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
-
-                if (addressData && addressData.addrview === normalizedAddress) {
-                    // same address
-                    return next();
-                }
-
-                usersdb.collection('addresses').findOne({
-                    addrview: normalizedAddress,
+            usersdb.collection('addresses').findOne(
+                {
+                    $or: [{ addrview: normalizedAddress }, { addrview: '*' + normalizedAddress.substr(normalizedAddress.indexOf('@')) }],
                     user: userData._id
-                }, (err, addressData) => {
+                },
+                (err, addressData) => {
                     if (err) {
                         return next(err);
                     }
 
-                    if (addressData) {
-                        // can send mail as this user
+                    if (!addressData) {
+                        // replace MAIL FROM address
+                        app.logger.info(
+                            'Rewrite',
+                            '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
+                            envelope.id,
+                            userData.username,
+                            envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
+                            userData.address
+                        );
+                        envelope.from = userData.address;
+                    }
+
+                    if (!headerFromObj) {
                         return next();
                     }
 
-                    app.logger.info(
-                        'Rewrite',
-                        '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
-                        envelope.id,
-                        userData.username,
-                        headerFromObj.address + (headerFromObj.address === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
-                        envelope.from
+                    normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
+                    normalizedAddress =
+                        normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') +
+                        normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
+                    if (addressData && addressData.addrview === normalizedAddress) {
+                        // same address
+                        return next();
+                    }
+
+                    usersdb.collection('addresses').findOne(
+                        {
+                            $or: [{ addrview: normalizedAddress }, { addrview: '*' + normalizedAddress.substr(normalizedAddress.indexOf('@')) }],
+                            user: userData._id
+                        },
+                        (err, addressData) => {
+                            if (err) {
+                                return next(err);
+                            }
+
+                            if (addressData) {
+                                // can send mail as this user
+                                return next();
+                            }
+
+                            app.logger.info(
+                                'Rewrite',
+                                '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
+                                envelope.id,
+                                userData.username,
+                                headerFromObj.address + (headerFromObj.address === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
+                                envelope.from
+                            );
+
+                            headerFromObj.address = envelope.from;
+
+                            let rootNode = new MimeNode();
+                            let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
+
+                            envelope.headers.update('From', newHeaderFrom);
+                            envelope.headers.update('X-WildDuck-Original-From', headerFrom);
+
+                            next();
+                        }
                     );
-
-                    headerFromObj.address = envelope.from;
-
-                    let rootNode = new MimeNode();
-                    let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
-
-                    envelope.headers.update('From', newHeaderFrom);
-                    envelope.headers.update('X-WildDuck-Original-From', headerFrom);
-
-                    next();
-                });
-            });
+                }
+            );
         });
     });
 
@@ -337,31 +344,34 @@ module.exports.init = function(app, done) {
         normalizedAddress =
             normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
-        usersdb.collection('addresses').findOne({
-            addrview: normalizedAddress
-        }, (err, addressData) => {
-            if (err) {
-                return next(err);
-            }
-
-            if (!addressData) {
-                // sender is not a local address, so use SRS rewriting
-                let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
-                let srsDomain = app.config.rewriteDomain;
-                try {
-                    delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
-                    delivery.headers.add('X-Original-Sender', from, Infinity);
-                } catch (E) {
-                    // failed rewriting address, keep as is
-                    app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
+        usersdb.collection('addresses').findOne(
+            {
+                addrview: normalizedAddress
+            },
+            (err, addressData) => {
+                if (err) {
+                    return next(err);
                 }
+
+                if (!addressData) {
+                    // sender is not a local address, so use SRS rewriting
+                    let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
+                    let srsDomain = app.config.rewriteDomain;
+                    try {
+                        delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
+                        delivery.headers.add('X-Original-Sender', from, Infinity);
+                    } catch (E) {
+                        // failed rewriting address, keep as is
+                        app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
+                    }
+                }
+
+                delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
+                delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
+
+                next();
             }
-
-            delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
-            delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
-
-            next();
-        });
+        );
     });
 
     app.addHook('log:entry', (entry, next) => {
@@ -397,32 +407,36 @@ module.exports.init = function(app, done) {
             return callback(err);
         }
 
-        usersdb.collection('users').findOne(query, {
-            fields: {
-                username: true,
-                address: true,
-                quota: true,
-                storageUsed: true,
-                recipients: true,
-                encryptMessages: true,
-                pubKey: true
-            }
-        }, (err, user) => {
-            if (err) {
-                return callback(err);
-            }
+        usersdb.collection('users').findOne(
+            query,
+            {
+                fields: {
+                    username: true,
+                    address: true,
+                    quota: true,
+                    storageUsed: true,
+                    recipients: true,
+                    encryptMessages: true,
+                    pubKey: true
+                }
+            },
+            (err, user) => {
+                if (err) {
+                    return callback(err);
+                }
 
-            if (!user) {
-                let err = new Error('User "' + query.username + '" was not found');
-                err.responseCode = 550;
-                err.name = 'SMTPResponse'; // do not throw
-                return callback(err);
+                if (!user) {
+                    let err = new Error('User "' + query.username + '" was not found');
+                    err.responseCode = 550;
+                    err.name = 'SMTPResponse'; // do not throw
+                    return callback(err);
+                }
+
+                users.set(envelope, user);
+
+                return callback(null, user);
             }
-
-            users.set(envelope, user);
-
-            return callback(null, user);
-        });
+        );
     }
 
     if (app.config.localMx) {
@@ -433,24 +447,27 @@ module.exports.init = function(app, done) {
             normalizedAddress =
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
-            usersdb.collection('addresses').findOne({
-                addrview: normalizedAddress
-            }, (err, addressData) => {
-                if (err) {
-                    return next(err);
-                }
-                if (!addressData) {
-                    // remote recipient
-                    return next();
-                }
-                // local recipient
+            usersdb.collection('addresses').findOne(
+                {
+                    addrview: normalizedAddress
+                },
+                (err, addressData) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    if (!addressData) {
+                        // remote recipient
+                        return next();
+                    }
+                    // local recipient
 
-                delivery.mx = [].concat(app.config.localMx || []);
-                delivery.mxPort = app.config.localMxPort;
-                delivery.useLMTP = app.config.localLmtp;
-                delivery.zoneAddress = app.config.localZoneAddress;
-                next();
-            });
+                    delivery.mx = [].concat(app.config.localMx || []);
+                    delivery.mxPort = app.config.localMxPort;
+                    delivery.useLMTP = app.config.localLmtp;
+                    delivery.zoneAddress = app.config.localZoneAddress;
+                    next();
+                }
+            );
         });
     }
 
