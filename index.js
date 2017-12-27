@@ -21,7 +21,7 @@ module.exports.init = function(app, done) {
     const ttlcounter = counters(redisClient).ttlcounter;
 
     const srsRewriter = new SRS({
-        secret: app.config.secret
+        secret: app.config.secret || '?'
     });
 
     const messageHandler = new MessageHandler({
@@ -334,7 +334,7 @@ module.exports.init = function(app, done) {
 
     // rewrite MAIL FROM: for messages forwarded by user filter
     app.addHook('sender:headers', (delivery, connection, next) => {
-        if (!app.config.forwardedSRS || !delivery.envelope.from || delivery.interface !== 'forwarder') {
+        if (!app.config.forwardedSRS || !delivery.envelope.from || delivery.interface !== 'forwarder' || delivery.skipSRS) {
             return next();
         }
 
