@@ -114,7 +114,7 @@ module.exports.init = function(app, done) {
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
             let checkAddress = (address, done) => {
-                userHandler.resolveAddress(address, false, (err, addressData) => {
+                userHandler.resolveAddress(address, { wildcard: true }, (err, addressData) => {
                     if (err) {
                         return done(err);
                     }
