@@ -113,80 +113,96 @@ module.exports.init = function(app, done) {
             normalizedAddress =
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
-            usersdb.collection('addresses').findOne(
-                {
-                    $or: [{ addrview: normalizedAddress }, { addrview: '*' + normalizedAddress.substr(normalizedAddress.indexOf('@')) }],
-                    user: userData._id
-                },
-                (err, addressData) => {
+            let checkAddress = (address, done) => {
+                userHandler.resolveAddress(address, false, (err, addressData) => {
+                    if (err) {
+                        return done(err);
+                    }
+
+                    if (!addressData) {
+                        return done(null, false);
+                    }
+
+                    if (addressData.user) {
+                        if (addressData.user.toString() === userData._id.toString()) {
+                            return done(null, addressData);
+                        } else {
+                            return done(null, false);
+                        }
+                    }
+
+                    if (addressData.targets) {
+                        if (addressData.targets.find(target => target.user && target.user.toString() === userData._id.toString())) {
+                            return done(null, addressData);
+                        } else {
+                            return done(null, false);
+                        }
+                    }
+                    return done(null, false);
+                });
+            };
+
+            checkAddress(envelope.from, (err, addressData) => {
+                if (err) {
+                    return next(err);
+                }
+
+                if (!addressData) {
+                    // replace MAIL FROM address
+                    app.logger.info(
+                        'Rewrite',
+                        '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
+                        envelope.id,
+                        userData.username,
+                        envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
+                        userData.address
+                    );
+                    envelope.from = userData.address;
+                }
+
+                if (!headerFromObj) {
+                    return next();
+                }
+
+                normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
+                normalizedAddress =
+                    normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
+                if (addressData && addressData.addrview === normalizedAddress) {
+                    // same address
+                    return next();
+                }
+
+                checkAddress(Buffer.from(headerFromObj.address, 'binary').toString(), (err, addressData) => {
                     if (err) {
                         return next(err);
                     }
 
-                    if (!addressData) {
-                        // replace MAIL FROM address
-                        app.logger.info(
-                            'Rewrite',
-                            '%s RWENVELOPE User %s tries to use "%s" as Return Path address, replacing with "%s"',
-                            envelope.id,
-                            userData.username,
-                            envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
-                            userData.address
-                        );
-                        envelope.from = userData.address;
-                    }
-
-                    if (!headerFromObj) {
+                    if (addressData) {
+                        // can send mail as this user
                         return next();
                     }
 
-                    normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
-                    normalizedAddress =
-                        normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') +
-                        normalizedAddress.substr(normalizedAddress.indexOf('@'));
-
-                    if (addressData && addressData.addrview === normalizedAddress) {
-                        // same address
-                        return next();
-                    }
-
-                    usersdb.collection('addresses').findOne(
-                        {
-                            $or: [{ addrview: normalizedAddress }, { addrview: '*' + normalizedAddress.substr(normalizedAddress.indexOf('@')) }],
-                            user: userData._id
-                        },
-                        (err, addressData) => {
-                            if (err) {
-                                return next(err);
-                            }
-
-                            if (addressData) {
-                                // can send mail as this user
-                                return next();
-                            }
-
-                            app.logger.info(
-                                'Rewrite',
-                                '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
-                                envelope.id,
-                                userData.username,
-                                headerFromObj.address + (headerFromObj.address === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
-                                envelope.from
-                            );
-
-                            headerFromObj.address = envelope.from;
-
-                            let rootNode = new MimeNode();
-                            let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
-
-                            envelope.headers.update('From', newHeaderFrom);
-                            envelope.headers.update('X-WildDuck-Original-From', headerFrom);
-
-                            next();
-                        }
+                    app.logger.info(
+                        'Rewrite',
+                        '%s RWFROM User %s tries to use "%s" as From address, replacing with "%s"',
+                        envelope.id,
+                        userData.username,
+                        headerFromObj.address + (headerFromObj.address === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
+                        envelope.from
                     );
-                }
-            );
+
+                    headerFromObj.address = envelope.from;
+
+                    let rootNode = new MimeNode();
+                    let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
+
+                    envelope.headers.update('From', newHeaderFrom);
+                    envelope.headers.update('X-WildDuck-Original-From', headerFrom);
+
+                    next();
+                });
+            });
         });
     });
 
