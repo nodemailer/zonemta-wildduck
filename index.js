@@ -390,6 +390,73 @@ module.exports.init = function(app, done) {
         );
     });
 
+    app.addHook('sender:connect', (delivery, options, next) => {
+        if (!delivery.dkim.keys) {
+            delivery.dkim.keys = [];
+        }
+
+        let from = delivery.envelope.from || '';
+        let fromDomain = from.substr(from.lastIndexOf('@') + 1);
+
+        let getKey = (domain, done) => {
+            database.collection('dkim').findOne(
+                {
+                    domain: tools.normalizeDomain(domain)
+                },
+                (err, keyData) => {
+                    if (err) {
+                        return done(err);
+                    }
+                    if (keyData) {
+                        return done(null, keyData);
+                    }
+                    database.collection('dkim').findOne(
+                        {
+                            domain: '*'
+                        },
+                        (err, keyData) => {
+                            if (err) {
+                                return done(err);
+                            }
+                            if (keyData) {
+                                return done(null, keyData);
+                            }
+                        }
+                    );
+                }
+            );
+        };
+
+        getKey(fromDomain, (err, keyData) => {
+            if (err) {
+                app.logger.error('DKIM', '%s.%s DBFAIL Failed loading DKIM key "%s". %s', delivery.id, delivery.seq, fromDomain, err.message);
+                return next();
+            }
+            if (keyData) {
+                delivery.dkim.keys.push({
+                    domainName: fromDomain,
+                    keySelector: keyData.selector,
+                    privateKey: keyData.privateKey
+                });
+            }
+
+            if (!app.config.signTransportDomain || delivery.dkim.keys.find(key => key.domainName === delivery.zoneAddress.name)) {
+                return next();
+            }
+
+            getKey(delivery.zoneAddress.name, (err, keyData) => {
+                if (!err && keyData) {
+                    delivery.dkim.keys.push({
+                        domainName: delivery.zoneAddress.name,
+                        keySelector: keyData.selector,
+                        privateKey: keyData.privateKey
+                    });
+                }
+                return next();
+            });
+        });
+    });
+
     app.addHook('log:entry', (entry, next) => {
         entry.created = new Date();
         database.collection('messagelog').insertOne(entry, () => next());

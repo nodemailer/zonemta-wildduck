@@ -8,8 +8,8 @@ Wild Duck actions apply only interfaces that require authentication.
 
 * **authentication** – if authentication is enabled for the smtp interface then authentication data is checked against Wild Duck user accounts
 * **From rewriting** – if the message has a From: address in the header that is not registered as one of the aliases for this user then the address part (but not the name) is rewritten with the default address for this user
-* **Upload to Sent Mail folder** – sent message is automatically appended to the *Sent Mail* folder of the user
-* **Reciepient limiting** – limit RCPT TO calls for 24 hour period based on the *recipients* user value
+* **Upload to Sent Mail folder** – sent message is automatically appended to the _Sent Mail_ folder of the user
+* **Reciepient limiting** – limit RCPT TO calls for 24 hour period based on the _recipients_ user value
 * **Local delivery** – messages that are handled current Wild Duck installation are routed directly to LMTP bypassing MX steps
 
 ## Setup
@@ -52,16 +52,21 @@ authlogExpireDays=30
 
 # Handle rewriting of forwarded emails
 forwardedSRS=true
+
 # SRS secret value. Must be the same as in the MX side
 secret="secret value"
+
 # SRS domain, must resolve back to MX
 rewriteDomain="example.com"
+
+# If true then also adds a signature for the outbound domain
+signTransportDomain=false
 
 # Delivery settings for local messages
 # do not set these values if you do not want to use local delivery
 
 # Use LMTP instead of SMTP
-localLmtp=true
+localLmtp=false
 localMxPort=24
 # SMTP/LMTP server for local delivery
 [["modules/zonemta-wildduck".localMx]]
