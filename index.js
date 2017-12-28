@@ -421,6 +421,7 @@ module.exports.init = function(app, done) {
                             if (keyData) {
                                 return done(null, keyData);
                             }
+                            return done();
                         }
                     );
                 }
