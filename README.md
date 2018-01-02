@@ -31,59 +31,8 @@ authentication=true
 port=587
 ```
 
-Then set up configuration for this plugin
-
-```toml
-# plugins/wildduck.toml
-["modules/zonemta-wildduck"]
-enabled=["receiver", "sender"]
-
-# which interfaces this plugin applies to
-interfaces=["feeder"]
-
-# optional hostname to be used in headers
-# defaults to os.hostname()
-hostname="example.com"
-
-# How long to keep auth records in log
-authlogExpireDays=30
-
-# SRS settings for forwarded emails
-
-# Handle rewriting of forwarded emails
-forwardedSRS=true
-
-# SRS secret value. Must be the same as in the MX side
-secret="secret value"
-
-# SRS domain, must resolve back to MX
-rewriteDomain="example.com"
-
-# If true then also adds a signature for the outbound domain
-signTransportDomain=false
-
-# Delivery settings for local messages
-# do not set these values if you do not want to use local delivery
-
-# Use LMTP instead of SMTP
-localLmtp=false
-localMxPort=24
-# SMTP/LMTP server for local delivery
-[["modules/zonemta-wildduck".localMx]]
-    priority=0
-    # hostname is for logging only, IP is actually used
-    exchange="example.com"
-    A=["127.0.0.1"]
-    AAAA=[]
-# Interface to be used for local delivery
-# Make sure that it can connect to the localMX IP
-["modules/zonemta-wildduck".localZoneAddress]
-    address="127.0.0.1"
-    name="example.com"
-```
-
-Local deliveries are deliveries to addresses that are handled by active Wild Duck installation. In case of these addresses MX step is ignored and messages are delivered directly to LMTP.
+Then set up configuration for this plugin, see the [example config](./config.example.toml) file for details.
 
 ## License
 
-European Union Public License 1.1 ([details](http://ec.europa.eu/idabc/eupl.html))
+European Union Public License 1.1 ([details](http://ec.europa.eu/idabc/eupl.html)) or later.

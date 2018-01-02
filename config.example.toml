@@ -1,0 +1,39 @@
+# plugins/wildduck.toml
+["modules/zonemta-wildduck"]
+enabled=["receiver", "sender"]
+
+# to which SMTP interfaces this plugin applies to. Use "*" for all interfaces
+interfaces=["feeder"]
+
+# optional hostname to be used in headers
+# defaults to os.hostname()
+hostname="example.com"
+
+# How long to keep auth records in log
+authlogExpireDays=30
+
+
+# SRS settings for forwarded emails
+# ---------------------------------
+
+# Handle rewriting of forwarded emails
+forwardedSRS=true
+
+# SRS secret value. Must be the same as in the MX side
+secret="secret value"
+
+# SRS domain, must resolve back to MX
+rewriteDomain="example.com"
+
+
+# DKIM Settings
+# -------------
+
+# If true then also adds a signature for the outbound domain
+signTransportDomain=false
+
+# If set then decrypt encrypted DKIM keys using this password
+#dkimSecret="a secret cat"
+
+# Cipher to use to decrypt encrypted DKIM keys
+#dkimCipher="aes192"

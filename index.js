@@ -5,6 +5,7 @@ const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
+const DkimHandler = require('wildduck/lib/dkim-handler');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
@@ -17,6 +18,12 @@ module.exports.init = function(app, done) {
     const database = app.db.database;
     const usersdb = app.db.users;
     const gridfsdb = app.db.gridfs;
+
+    const dkimHandler = new DkimHandler({
+        cipher: app.config.dkimCipher,
+        secret: app.config.dkimSecret,
+        database: app.db.database
+    });
 
     const ttlcounter = counters(redisClient).ttlcounter;
 
@@ -399,33 +406,23 @@ module.exports.init = function(app, done) {
         let fromDomain = from.substr(from.lastIndexOf('@') + 1);
 
         let getKey = (domain, done) => {
-            database.collection('dkim').findOne(
-                {
-                    domain: tools.normalizeDomain(domain)
-                },
-                (err, keyData) => {
+            dkimHandler.get(domain, true, (err, keyData) => {
+                if (err) {
+                    return done(err);
+                }
+                if (keyData) {
+                    return done(null, keyData);
+                }
+                dkimHandler.get('*', true, (err, keyData) => {
                     if (err) {
                         return done(err);
                     }
                     if (keyData) {
                         return done(null, keyData);
                     }
-                    database.collection('dkim').findOne(
-                        {
-                            domain: '*'
-                        },
-                        (err, keyData) => {
-                            if (err) {
-                                return done(err);
-                            }
-                            if (keyData) {
-                                return done(null, keyData);
-                            }
-                            return done();
-                        }
-                    );
-                }
-            );
+                    return done();
+                });
+            });
         };
 
         getKey(fromDomain, (err, keyData) => {
@@ -435,7 +432,7 @@ module.exports.init = function(app, done) {
             }
             if (keyData) {
                 delivery.dkim.keys.push({
-                    domainName: fromDomain,
+                    domainName: tools.normalizeDomain(fromDomain),
                     keySelector: keyData.selector,
                     privateKey: keyData.privateKey
                 });
@@ -448,7 +445,7 @@ module.exports.init = function(app, done) {
             getKey(delivery.zoneAddress.name, (err, keyData) => {
                 if (!err && keyData) {
                     delivery.dkim.keys.push({
-                        domainName: delivery.zoneAddress.name,
+                        domainName: tools.normalizeDomain(delivery.zoneAddress.name),
                         keySelector: keyData.selector,
                         privateKey: keyData.privateKey
                     });
