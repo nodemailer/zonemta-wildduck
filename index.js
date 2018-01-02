@@ -10,7 +10,7 @@ const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
 
-module.exports.title = 'Wild Duck MSA';
+module.exports.title = 'WildDuck MSA';
 module.exports.init = function(app, done) {
     const users = new WeakMap();
 
