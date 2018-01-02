@@ -16,24 +16,26 @@ authlogExpireDays=30
 # SRS settings for forwarded emails
 # ---------------------------------
 
-# Handle rewriting of forwarded emails
-forwardedSRS=true
+[srs]
+    # Handle rewriting of forwarded emails. If false then SRS is not used
+    # Only affect messages that have interface set to "forwarder"
+    enabled=true
 
-# SRS secret value. Must be the same as in the MX side
-secret="secret value"
+    # SRS secret value. Must be the same as in the MX side
+    secret="secret value"
 
-# SRS domain, must resolve back to MX
-rewriteDomain="example.com"
-
+    # SRS domain, must resolve back to MX
+    rewriteDomain="example.com"
 
 # DKIM Settings
 # -------------
 
-# If true then also adds a signature for the outbound domain
-signTransportDomain=false
+[dkim]
+    # If true then also adds a signature for the outbound domain
+    signTransportDomain=false
 
-# If set then decrypt encrypted DKIM keys using this password
-#dkimSecret="a secret cat"
+    # If set then decrypt encrypted DKIM keys using this password
+    #secret="a secret cat"
 
-# Cipher to use to decrypt encrypted DKIM keys
-#dkimCipher="aes192"
+    # Cipher to use to decrypt encrypted DKIM keys
+    #cipher="aes192"

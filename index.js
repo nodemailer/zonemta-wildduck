@@ -20,15 +20,15 @@ module.exports.init = function(app, done) {
     const gridfsdb = app.db.gridfs;
 
     const dkimHandler = new DkimHandler({
-        cipher: app.config.dkimCipher,
-        secret: app.config.dkimSecret,
+        cipher: app.config.dkim && app.config.dkim.cipher,
+        secret: app.config.dkim && app.config.dkim.secret,
         database: app.db.database
     });
 
     const ttlcounter = counters(redisClient).ttlcounter;
 
     const srsRewriter = new SRS({
-        secret: app.config.secret || '?'
+        secret: (app.config.srs && app.config.srs.secret) || '?'
     });
 
     const messageHandler = new MessageHandler({
@@ -357,7 +357,7 @@ module.exports.init = function(app, done) {
 
     // rewrite MAIL FROM: for messages forwarded by user filter
     app.addHook('sender:headers', (delivery, connection, next) => {
-        if (!app.config.forwardedSRS || !delivery.envelope.from || delivery.interface !== 'forwarder' || delivery.skipSRS) {
+        if (!app.config.srs || !app.config.srs.enabled || !delivery.envelope.from || delivery.interface !== 'forwarder' || delivery.skipSRS) {
             return next();
         }
 
@@ -379,7 +379,7 @@ module.exports.init = function(app, done) {
                 if (!addressData) {
                     // sender is not a local address, so use SRS rewriting
                     let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
-                    let srsDomain = app.config.rewriteDomain;
+                    let srsDomain = app.config.srs && app.config.srs.rewriteDomain;
                     try {
                         delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
                         delivery.headers.add('X-Original-Sender', from, Infinity);
