@@ -406,14 +406,14 @@ module.exports.init = function(app, done) {
         let fromDomain = from.substr(from.lastIndexOf('@') + 1);
 
         let getKey = (domain, done) => {
-            dkimHandler.get(domain, true, (err, keyData) => {
+            dkimHandler.get({ domain }, true, (err, keyData) => {
                 if (err) {
                     return done(err);
                 }
                 if (keyData) {
                     return done(null, keyData);
                 }
-                dkimHandler.get('*', true, (err, keyData) => {
+                dkimHandler.get({ domain: '*' }, true, (err, keyData) => {
                     if (err) {
                         return done(err);
                     }
