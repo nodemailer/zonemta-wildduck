@@ -13,10 +13,13 @@ hostname="example.com"
 authlogExpireDays=30
 
 
+disableUploads=false # if true then messages are not uploaded to Sent Mail folder
+uploadAll=false # if false then messages from Outlook are not uploaded to Sent Mail folder
+
 # SRS settings for forwarded emails
 # ---------------------------------
 
-[srs]
+["modules/zonemta-wildduck".srs]
     # Handle rewriting of forwarded emails. If false then SRS is not used
     # Only affect messages that have interface set to "forwarder"
     enabled=true
@@ -30,7 +33,7 @@ authlogExpireDays=30
 # DKIM Settings
 # -------------
 
-[dkim]
+["modules/zonemta-wildduck".dkim]
     # If true then also adds a signature for the outbound domain
     signTransportDomain=false
 

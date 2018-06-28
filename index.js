@@ -306,7 +306,11 @@ module.exports.init = function(app, done) {
                 // It doesn't really matter if it succeeds or not so we are not waiting until it's done
                 setImmediate(next);
 
-                if (envelope.headers.getFirst('Thread-Index')) {
+                if (app.config.disableUploads) {
+                    return; // do not upload messages to Sent Mail folder
+                }
+
+                if (!app.config.uploadAll && envelope.headers.getFirst('Thread-Index')) {
                     //FIXME: Find a way to detect duplicates from MS Outlook as it generates
                     //FIXME: separate messages with different Message-ID and boundary values for IMAP and SMTP
                     app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=Outlook', envelope.id, envelope.user);
