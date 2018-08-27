@@ -59,6 +59,26 @@ module.exports.init = function(app, done) {
             return next();
         }
 
+        if (auth.method === 'XCLIENT') {
+            // special proxied connection where authentication is handled upstream
+            // XCLIENT is only available if smtp server has useXClient option set to true
+            return userHandler.get(auth.username, { username: true }, (err, userData) => {
+                if (err) {
+                    return next(err);
+                }
+                if (!userData) {
+                    let message = 'Authentication failed';
+                    err = new Error(message);
+                    err.responseCode = 535;
+                    err.name = 'SMTPResponse'; // do not throw
+                    return next(err);
+                }
+
+                auth.username = userData.username;
+                next();
+            });
+        }
+
         userHandler.authenticate(
             auth.username,
             auth.password,
