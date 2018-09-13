@@ -300,6 +300,10 @@ module.exports.init = function(app, done) {
                 return next(err);
             }
 
+            if (!userData.uploadSentMessages) {
+                return next();
+            }
+
             if (userData.quota && userData.storageUsed > userData.quota) {
                 // skip upload, not enough storage
                 app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
@@ -326,15 +330,10 @@ module.exports.init = function(app, done) {
                 // It doesn't really matter if it succeeds or not so we are not waiting until it's done
                 setImmediate(next);
 
+                // from now on use `return;` to end sequence as next() is already called
+
                 if (app.config.disableUploads) {
                     return; // do not upload messages to Sent Mail folder
-                }
-
-                if (!app.config.uploadAll && envelope.headers.getFirst('Thread-Index')) {
-                    //FIXME: Find a way to detect duplicates from MS Outlook as it generates
-                    //FIXME: separate messages with different Message-ID and boundary values for IMAP and SMTP
-                    app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=Outlook', envelope.id, envelope.user);
-                    return; // skip, otherwise we end up with duplicate messages in Sent Mail folder
                 }
 
                 let raw = Buffer.concat(chunks, chunklen);
@@ -523,14 +522,15 @@ module.exports.init = function(app, done) {
         usersdb.collection('users').findOne(
             query,
             {
-                fields: {
+                projection: {
                     username: true,
                     address: true,
                     quota: true,
                     storageUsed: true,
                     recipients: true,
                     encryptMessages: true,
-                    pubKey: true
+                    pubKey: true,
+                    uploadSentMessages: true
                 }
             },
             (err, user) => {
@@ -550,38 +550,6 @@ module.exports.init = function(app, done) {
                 return callback(null, user);
             }
         );
-    }
-
-    if (app.config.localMx) {
-        app.addHook('sender:fetch', (delivery, next) => {
-            let normalizedAddress;
-
-            normalizedAddress = tools.normalizeAddress(delivery.envelope.to);
-            normalizedAddress =
-                normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
-
-            usersdb.collection('addresses').findOne(
-                {
-                    addrview: normalizedAddress
-                },
-                (err, addressData) => {
-                    if (err) {
-                        return next(err);
-                    }
-                    if (!addressData) {
-                        // remote recipient
-                        return next();
-                    }
-                    // local recipient
-
-                    delivery.mx = [].concat(app.config.localMx || []);
-                    delivery.mxPort = app.config.localMxPort;
-                    delivery.useLMTP = app.config.localLmtp;
-                    delivery.zoneAddress = app.config.localZoneAddress;
-                    next();
-                }
-            );
-        });
     }
 
     done();
