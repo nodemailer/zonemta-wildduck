@@ -456,7 +456,7 @@ module.exports.init = function(app, done) {
         };
 
         getKey(fromDomain, (err, keyData) => {
-            if (err && err.code !== 'KeyNotFound') {
+            if (err && err.code !== 'DkimNotFound') {
                 app.logger.error('DKIM', '%s.%s DBFAIL Failed loading DKIM key "%s". %s', delivery.id, delivery.seq, fromDomain, err.message);
                 return next();
             }
