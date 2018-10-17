@@ -235,6 +235,7 @@ module.exports.init = function(app, done) {
                     loggelf({
                         short_message: component + ' [RWENVELOPE] ' + envelope.id,
                         _mail_action: 'headers',
+                        _rw_envelope_from: 'yes',
                         _queue_id: envelope.id,
                         _envelope_from: envelope.from,
                         _rewrite_from: userData.address
@@ -278,6 +279,7 @@ module.exports.init = function(app, done) {
                     loggelf({
                         short_message: component + ' [RWFROM] ' + envelope.id,
                         _mail_action: 'headers',
+                        _rw_header_from: 'yes',
                         _queue_id: envelope.id,
                         _header_from: headerFromObj.address,
                         _rewrite_from: envelope.from
@@ -587,7 +589,7 @@ module.exports.init = function(app, done) {
 
         switch (entry.action) {
             case 'QUEUED':
-                message.short_message = 'Message queued for delivery';
+                message.short_message = component + ' SMTP [QUEUED] ' + entry.id;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._queued = 'yes';
@@ -600,7 +602,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'ACCEPTED':
-                message.short_message = 'Message queued for delivery';
+                message.short_message = component + ' SMTP [ACCEPTED] ' + entry.id + '.' + entry.seq;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._accepted = 'yes';
@@ -612,7 +614,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DEFERRED':
-                message.short_message = 'Message soft bounced';
+                message.short_message = component + ' SMTP [DEFERRED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -630,7 +632,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'REJECTED':
-                message.short_message = 'Message bounced';
+                message.short_message = component + ' SMTP [REJECTED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -648,7 +650,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'NOQUEUE':
-                message.short_message = 'Message not queued';
+                message.short_message = component + ' SMTP [NOQUEUE] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -665,7 +667,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DELETED':
-                message.short_message = 'Message deleted';
+                message.short_message = component + ' SMTP [DELETED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -676,7 +678,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DROP':
-                message.short_message = 'Message dropped';
+                message.short_message = component + ' SMTP [DROP] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
