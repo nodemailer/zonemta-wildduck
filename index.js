@@ -9,6 +9,7 @@ const DkimHandler = require('wildduck/lib/dkim-handler');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
+const Gelf = require('gelf');
 
 module.exports.title = 'WildDuck MSA';
 module.exports.init = function(app, done) {
@@ -18,6 +19,35 @@ module.exports.init = function(app, done) {
     const database = app.db.database;
     const usersdb = app.db.users;
     const gridfsdb = app.db.gridfs;
+
+    const component = (app.config.gelf.component || 'mta').toUpperCase();
+    const hostname = app.config.hostname || os.hostname();
+    const gelf =
+        app.config.gelf && app.config.gelf.enabled
+            ? new Gelf(app.config.gelf.options)
+            : {
+                  // placeholder
+                  emit: () => false
+              };
+
+    const loggelf = message => {
+        if (typeof message === 'string') {
+            message = {
+                short_message: message
+            };
+        }
+        message = message || {};
+        message.facility = app.config.gelf.component || 'mta'; // facility is deprecated but set by the driver if not provided
+        message.host = hostname;
+        message.timestamp = Date.now() / 1000;
+        message._component = app.config.gelf.component || 'mta';
+        Object.keys(message).forEach(key => {
+            if (!message[key]) {
+                delete message[key];
+            }
+        });
+        gelf.emit('gelf.log', message);
+    };
 
     const dkimHandler = new DkimHandler({
         cipher: app.config.dkim && app.config.dkim.cipher,
@@ -39,7 +69,8 @@ module.exports.init = function(app, done) {
         attachments: app.config.attachments || {
             type: 'gridstore',
             bucket: 'attachments'
-        }
+        },
+        loggelf: message => loggelf(message)
     });
 
     const userHandler = new UserHandler({
@@ -47,7 +78,8 @@ module.exports.init = function(app, done) {
         redis: redisClient,
         gridfs: gridfsdb,
         users: usersdb,
-        authlogExpireDays: app.config.authlogExpireDays
+        authlogExpireDays: app.config.authlogExpireDays,
+        loggelf: message => loggelf(message)
     });
 
     const interfaces = [].concat(app.config.interfaces || '*');
@@ -99,8 +131,33 @@ module.exports.init = function(app, done) {
                     err = new Error(message);
                     err.responseCode = 535;
                     err.name = 'SMTPResponse'; // do not throw
+
+                    loggelf({
+                        short_message: component + ' SMTP [AUTH FAIL:' + auth.username + '] ' + session.id,
+
+                        _auth_fail: 'yes',
+                        _mail_action: 'auth',
+                        _username: auth.username,
+                        _require_asp: result ? 'yes' : '',
+
+                        _session_id: session.id,
+                        _ip: session.remoteAddress
+                    });
+
                     return next(err);
                 }
+
+                loggelf({
+                    short_message: component + ' SMTP [AUTH OK:' + auth.username + '] ' + session.id,
+
+                    _auth_ok: 'yes',
+                    _mail_action: 'auth',
+                    _username: auth.username,
+                    _scope: result.scope,
+
+                    _session_id: session.id,
+                    _ip: session.remoteAddress
+                });
 
                 auth.username = result.username;
                 next();
@@ -175,6 +232,14 @@ module.exports.init = function(app, done) {
                 }
 
                 if (!addressData) {
+                    loggelf({
+                        short_message: component + ' [RWENVELOPE] ' + envelope.id,
+                        _mail_action: 'headers',
+                        _queue_id: envelope.id,
+                        _envelope_from: envelope.from,
+                        _rewrite_from: userData.address
+                    });
+
                     // replace MAIL FROM address
                     app.logger.info(
                         'Rewrite',
@@ -209,6 +274,14 @@ module.exports.init = function(app, done) {
                         // can send mail as this user
                         return next();
                     }
+
+                    loggelf({
+                        short_message: component + ' [RWFROM] ' + envelope.id,
+                        _mail_action: 'headers',
+                        _queue_id: envelope.id,
+                        _header_from: headerFromObj.address,
+                        _rewrite_from: envelope.from
+                    });
 
                     app.logger.info(
                         'Rewrite',
@@ -268,6 +341,15 @@ module.exports.init = function(app, done) {
                 }
 
                 if (!success) {
+                    loggelf({
+                        short_message: component + ' [RCPT TO:' + address.address + '] ' + session.id,
+                        _to: address.address,
+                        _mail_action: 'rcpt_to',
+                        _daily: 'yes',
+                        _rate_limit: 'yes',
+                        _error: 'daily sending limit reached'
+                    });
+
                     app.logger.info(
                         'Sender',
                         '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.',
@@ -282,6 +364,15 @@ module.exports.init = function(app, done) {
                     err.name = 'SMTPResponse';
                     return setImmediate(() => next(err));
                 }
+
+                loggelf({
+                    short_message: component + ' [RCPT TO:' + address.address + '] ' + session.id,
+                    _user: userData._id.toString(),
+                    _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
+                    _to: address.address,
+                    _mail_action: 'rcpt_to',
+                    _allowed: 'yes'
+                });
 
                 app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
                 next();
@@ -311,7 +402,7 @@ module.exports.init = function(app, done) {
             }
 
             let chunks = [
-                Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, app.config.hostname || os.hostname()) + '\r\n'),
+                Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
                 envelope.headers.build()
             ];
             let chunklen = chunks[0].length + chunks[1].length;
@@ -488,6 +579,118 @@ module.exports.init = function(app, done) {
 
     app.addHook('log:entry', (entry, next) => {
         entry.created = new Date();
+
+        let message = {
+            _queue_id: (entry.id || '').toString(),
+            _queue_id_seq: (entry.seq || '').toString()
+        };
+
+        switch (entry.action) {
+            case 'QUEUED':
+                message.short_message = 'Message queued for delivery';
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+                message._queued = 'yes';
+                message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
+                message._ip = entry.src;
+                message._body_size = entry.body;
+                message._spam_score = Number(entry.score) || '';
+                message._interface = entry.interface;
+                message._proto = entry.transtype;
+                break;
+
+            case 'ACCEPTED':
+                message.short_message = 'Message queued for delivery';
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+                message._accepted = 'yes';
+                message._zone = entry.zone;
+                message._mx = entry.mx;
+                message._mx_host = entry.host;
+                message._local_ip = entry.ip;
+                message._response = entry.response;
+                break;
+
+            case 'DEFERRED':
+                message.short_message = 'Message soft bounced';
+
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+                message._bounce_category = entry.category;
+                message._bounce_count = entry.defcount;
+
+                message._deferred = 'yes';
+                message._zone = entry.zone;
+
+                message._mx = entry.mx;
+                message._mx_host = entry.host;
+                message._local_ip = entry.ip;
+
+                message._response = entry.response;
+                break;
+
+            case 'REJECTED':
+                message.short_message = 'Message bounced';
+
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+                message._bounce_category = entry.category;
+                message._bounce_count = entry.defcount;
+
+                message._bounced = 'yes';
+                message._zone = entry.zone;
+
+                message._mx = entry.mx;
+                message._mx_host = entry.host;
+                message._local_ip = entry.ip;
+
+                message._response = entry.response;
+                break;
+
+            case 'NOQUEUE':
+                message.short_message = 'Message not queued';
+
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+
+                message._dropped = 'yes';
+                message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
+                message._ip = entry.src;
+                message._body_size = entry.body;
+                message._spam_score = Number(entry.score) || '';
+                message._interface = entry.interface;
+                message._proto = entry.transtype;
+
+                message._response = entry.responseText;
+                break;
+
+            case 'DELETED':
+                message.short_message = 'Message deleted';
+
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+
+                message._deleted = 'yes';
+
+                message._response = entry.reason;
+                break;
+
+            case 'DROP':
+                message.short_message = 'Message dropped';
+
+                message._from = (entry.from || '').toString();
+                message._to = (entry.to || '').toString();
+
+                message._dropped = 'yes';
+
+                message._response = entry.reason;
+                break;
+        }
+
+        if (message.short_message) {
+            loggelf(message);
+        }
+
         database.collection('messagelog').insertOne(entry, () => next());
     });
 
