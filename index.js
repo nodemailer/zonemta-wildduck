@@ -20,7 +20,7 @@ module.exports.init = function(app, done) {
     const usersdb = app.db.users;
     const gridfsdb = app.db.gridfs;
 
-    const component = (app.config.gelf.component || 'mta').toUpperCase();
+    const component = ((app.config.gelf && app.config.gelf.component) || 'mta').toUpperCase();
     const hostname = app.config.hostname || os.hostname();
     const gelf =
         app.config.gelf && app.config.gelf.enabled
@@ -52,7 +52,8 @@ module.exports.init = function(app, done) {
     const dkimHandler = new DkimHandler({
         cipher: app.config.dkim && app.config.dkim.cipher,
         secret: app.config.dkim && app.config.dkim.secret,
-        database: app.db.database
+        database: app.db.database,
+        loggelf: message => loggelf(message)
     });
 
     const ttlcounter = counters(redisClient).ttlcounter;
@@ -103,6 +104,19 @@ module.exports.init = function(app, done) {
                     err = new Error(message);
                     err.responseCode = 535;
                     err.name = 'SMTPResponse'; // do not throw
+
+                    loggelf({
+                        short_message: component + ' SMTP [AUTH FAIL:' + auth.username + '] ' + session.id,
+
+                        _auth_fail: 'yes',
+                        _mail_action: 'auth',
+                        _username: auth.username,
+                        _xclient: 'yes',
+
+                        _session_id: session.id,
+                        _ip: session.remoteAddress
+                    });
+
                     return next(err);
                 }
 
