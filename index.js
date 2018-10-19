@@ -37,6 +37,11 @@ module.exports.init = function(app, done) {
             };
         }
         message = message || {};
+
+        if (!message.short_message || message.short_message.indexOf(component.toUpperCase()) !== 0) {
+            message.short_message = component.toUpperCase() + ' ' + (message.short_message || '');
+        }
+
         message.facility = app.config.gelf.component || 'mta'; // facility is deprecated but set by the driver if not provided
         message.host = hostname;
         message.timestamp = Date.now() / 1000;
@@ -106,7 +111,7 @@ module.exports.init = function(app, done) {
                     err.name = 'SMTPResponse'; // do not throw
 
                     loggelf({
-                        short_message: component + ' SMTP [AUTH FAIL:' + auth.username + '] ' + session.id,
+                        short_message: '[AUTH FAIL:' + auth.username + '] ' + session.id,
 
                         _auth_fail: 'yes',
                         _mail_action: 'auth',
@@ -147,7 +152,7 @@ module.exports.init = function(app, done) {
                     err.name = 'SMTPResponse'; // do not throw
 
                     loggelf({
-                        short_message: component + ' SMTP [AUTH FAIL:' + auth.username + '] ' + session.id,
+                        short_message: '[AUTH FAIL:' + auth.username + '] ' + session.id,
 
                         _auth_fail: 'yes',
                         _mail_action: 'auth',
@@ -162,7 +167,7 @@ module.exports.init = function(app, done) {
                 }
 
                 loggelf({
-                    short_message: component + ' SMTP [AUTH OK:' + auth.username + '] ' + session.id,
+                    short_message: '[AUTH OK:' + auth.username + '] ' + session.id,
 
                     _auth_ok: 'yes',
                     _mail_action: 'auth',
@@ -247,7 +252,7 @@ module.exports.init = function(app, done) {
 
                 if (!addressData) {
                     loggelf({
-                        short_message: component + ' [RWENVELOPE] ' + envelope.id,
+                        short_message: '[RWENVELOPE] ' + envelope.id,
                         _mail_action: 'headers',
                         _rw_envelope_from: 'yes',
                         _queue_id: envelope.id,
@@ -291,7 +296,7 @@ module.exports.init = function(app, done) {
                     }
 
                     loggelf({
-                        short_message: component + ' [RWFROM] ' + envelope.id,
+                        short_message: '[RWFROM] ' + envelope.id,
                         _mail_action: 'headers',
                         _rw_header_from: 'yes',
                         _queue_id: envelope.id,
@@ -358,7 +363,7 @@ module.exports.init = function(app, done) {
 
                 if (!success) {
                     loggelf({
-                        short_message: component + ' [RCPT TO:' + address.address + '] ' + session.id,
+                        short_message: '[RCPT TO:' + address.address + '] ' + session.id,
                         _to: address.address,
                         _mail_action: 'rcpt_to',
                         _daily: 'yes',
@@ -382,7 +387,7 @@ module.exports.init = function(app, done) {
                 }
 
                 loggelf({
-                    short_message: component + ' [RCPT TO:' + address.address + '] ' + session.id,
+                    short_message: '[RCPT TO:' + address.address + '] ' + session.id,
                     _user: userData._id.toString(),
                     _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
                     _to: address.address,
@@ -603,7 +608,7 @@ module.exports.init = function(app, done) {
 
         switch (entry.action) {
             case 'QUEUED':
-                message.short_message = component + ' SMTP [QUEUED] ' + entry.id;
+                message.short_message = '[QUEUED] ' + entry.id;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._queued = 'yes';
@@ -616,7 +621,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'ACCEPTED':
-                message.short_message = component + ' SMTP [ACCEPTED] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[ACCEPTED] ' + entry.id + '.' + entry.seq;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._accepted = 'yes';
@@ -628,7 +633,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DEFERRED':
-                message.short_message = component + ' SMTP [DEFERRED] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[DEFERRED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -646,7 +651,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'REJECTED':
-                message.short_message = component + ' SMTP [REJECTED] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[REJECTED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -664,7 +669,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'NOQUEUE':
-                message.short_message = component + ' SMTP [NOQUEUE] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[NOQUEUE] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -681,7 +686,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DELETED':
-                message.short_message = component + ' SMTP [DELETED] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[DELETED] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -692,7 +697,7 @@ module.exports.init = function(app, done) {
                 break;
 
             case 'DROP':
-                message.short_message = component + ' SMTP [DROP] ' + entry.id + '.' + entry.seq;
+                message.short_message = '[DROP] ' + entry.id + '.' + entry.seq;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -707,7 +712,7 @@ module.exports.init = function(app, done) {
             loggelf(message);
         }
 
-        database.collection('messagelog').insertOne(entry, () => next());
+        return next();
     });
 
     function checkInterface(iface) {
