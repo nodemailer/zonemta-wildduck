@@ -1,6 +1,6 @@
 {
     "name": "zonemta-wildduck",
-    "version": "1.16.0",
+    "version": "1.16.1",
     "description": "WildDuck MSA plugin for ZoneMTA",
     "main": "index.js",
     "author": "Andris Reinman",
@@ -13,7 +13,7 @@
         "gelf": "2.0.1",
         "nodemailer": "4.6.8",
         "srs.js": "0.1.0",
-        "wildduck": "1.8.0"
+        "wildduck": "1.9.2"
     },
     "devDependencies": {
         "eslint": "5.7.0",
