@@ -618,6 +618,7 @@ module.exports.init = function(app, done) {
                 message._spam_score = Number(entry.score) || '';
                 message._interface = entry.interface;
                 message._proto = entry.transtype;
+                message._subject = (entry.subject || '').replace(/^[\s"]+|[\s"]+$/g, '');
                 break;
 
             case 'ACCEPTED':
