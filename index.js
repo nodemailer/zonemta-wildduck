@@ -608,19 +608,26 @@ module.exports.init = function(app, done) {
 
         switch (entry.action) {
             case 'QUEUED':
-                message.short_message = '[QUEUED] ' + entry.id;
-                message._from = (entry.from || '').toString();
-                message._to = (entry.to || '').toString();
-                message._queued = 'yes';
-                message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
-                message._ip = entry.src;
-                message._body_size = entry.body;
-                message._spam_score = Number(entry.score) || '';
-                message._interface = entry.interface;
-                message._proto = entry.transtype;
-                message._subject = entry.subject;
-                message._header_from = entry.headerFrom;
-                message._authenticated_sender = entry.user || entry.auth;
+                {
+                    let username = (entry.user || entry.auth || '').toString();
+                    let match = username.match(/\[([^\]]+)]/);
+                    if (match && match[1]) {
+                        username = match[1];
+                    }
+                    message.short_message = '[QUEUED] ' + entry.id;
+                    message._from = (entry.from || '').toString();
+                    message._to = (entry.to || '').toString();
+                    message._queued = 'yes';
+                    message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
+                    message._ip = entry.src;
+                    message._body_size = entry.body;
+                    message._spam_score = Number(entry.score) || '';
+                    message._interface = entry.interface;
+                    message._proto = entry.transtype;
+                    message._subject = entry.subject;
+                    message._header_from = entry.headerFrom;
+                    message._authenticated_sender = username;
+                }
                 break;
 
             case 'ACCEPTED':
@@ -794,6 +801,12 @@ function generateReceivedHeader(envelope, hostname) {
         origin = origin.join(' ').trim() || 'localhost';
     }
 
+    let username = (envelope.user || '').toString();
+    let match = username.match(/\[([^\]]+)]/);
+    if (match && match[1]) {
+        username = match[1];
+    }
+
     let value =
         '' +
         // from ehlokeyword
@@ -804,7 +817,7 @@ function generateReceivedHeader(envelope, hostname) {
         origin +
         (originhost ? '\r\n' : '') +
         // (Authenticated sender: username)
-        (envelope.user ? ' (Authenticated sender: ' + envelope.user + ')\r\n' : !originhost ? '\r\n' : '') +
+        (envelope.user ? ' (Authenticated sender: ' + username + ')\r\n' : !originhost ? '\r\n' : '') +
         // by smtphost
         ' by ' +
         hostname +
