@@ -100,7 +100,7 @@ module.exports.init = function(app, done) {
         if (auth.method === 'XCLIENT') {
             // special proxied connection where authentication is handled upstream
             // XCLIENT is only available if smtp server has useXClient option set to true
-            return userHandler.get(auth.username, { username: true }, (err, userData) => {
+            return userHandler.get(auth.username, { username: true, address: true }, (err, userData) => {
                 if (err) {
                     return next(err);
                 }
@@ -125,7 +125,7 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
 
-                auth.username = userData.username;
+                auth.username = userData.address;
                 next();
             });
         }
@@ -618,7 +618,9 @@ module.exports.init = function(app, done) {
                 message._spam_score = Number(entry.score) || '';
                 message._interface = entry.interface;
                 message._proto = entry.transtype;
-                message._subject = (entry.subject || '').replace(/^[\s"]+|[\s"]+$/g, '');
+                message._subject = entry.subject;
+                message._header_from = entry.headerFrom;
+                message._authenticated_sender = entry.user || entry.auth;
                 break;
 
             case 'ACCEPTED':
