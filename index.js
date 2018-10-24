@@ -125,6 +125,7 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
 
+                auth.username = userData.username + '[' + auth.username + ']';
                 next();
             });
         }
@@ -177,6 +178,7 @@ module.exports.init = function(app, done) {
                     _ip: session.remoteAddress
                 });
 
+                auth.username = result.username + '[' + auth.username + ']';
                 next();
             }
         );
@@ -733,7 +735,7 @@ module.exports.init = function(app, done) {
 
         if (envelope.user) {
             query = {
-                username: envelope.user
+                username: envelope.user.split('[').shift()
             };
         }
 
