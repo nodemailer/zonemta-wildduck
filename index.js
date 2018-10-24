@@ -125,7 +125,6 @@ module.exports.init = function(app, done) {
                     return next(err);
                 }
 
-                auth.username = userData.address;
                 next();
             });
         }
@@ -178,7 +177,6 @@ module.exports.init = function(app, done) {
                     _ip: session.remoteAddress
                 });
 
-                auth.username = result.username;
                 next();
             }
         );
