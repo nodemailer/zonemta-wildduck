@@ -253,8 +253,7 @@ module.exports.init = function(app, done) {
                 if (!addressData) {
                     loggelf({
                         short_message: '[RWENVELOPE] ' + envelope.id,
-                        _mail_action: 'headers',
-                        _rw_envelope_from: 'yes',
+                        _mail_action: 'rw_envelope_from',
                         _queue_id: envelope.id,
                         _envelope_from: envelope.from,
                         _rewrite_from: userData.address
@@ -297,8 +296,7 @@ module.exports.init = function(app, done) {
 
                     loggelf({
                         short_message: '[RWFROM] ' + envelope.id,
-                        _mail_action: 'headers',
-                        _rw_header_from: 'yes',
+                        _mail_action: 'rw_header_from',
                         _queue_id: envelope.id,
                         _header_from: headerFromObj.address,
                         _rewrite_from: envelope.from
@@ -617,7 +615,7 @@ module.exports.init = function(app, done) {
                     message.short_message = '[QUEUED] ' + entry.id;
                     message._from = (entry.from || '').toString();
                     message._to = (entry.to || '').toString();
-                    message._queued = 'yes';
+                    message._mail_action = 'queued';
                     message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
                     message._ip = entry.src;
                     message._body_size = entry.body;
@@ -634,7 +632,7 @@ module.exports.init = function(app, done) {
                 message.short_message = '[ACCEPTED] ' + entry.id + '.' + entry.seq;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
-                message._accepted = 'yes';
+                message._mail_action = 'accepted';
                 message._zone = entry.zone;
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
@@ -650,7 +648,7 @@ module.exports.init = function(app, done) {
                 message._bounce_category = entry.category;
                 message._bounce_count = entry.defcount;
 
-                message._deferred = 'yes';
+                message._mail_action = 'deferred';
                 message._zone = entry.zone;
 
                 message._mx = entry.mx;
@@ -668,7 +666,7 @@ module.exports.init = function(app, done) {
                 message._bounce_category = entry.category;
                 message._bounce_count = entry.defcount;
 
-                message._bounced = 'yes';
+                message._mail_action = 'bounced';
                 message._zone = entry.zone;
 
                 message._mx = entry.mx;
@@ -684,7 +682,7 @@ module.exports.init = function(app, done) {
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
 
-                message._dropped = 'yes';
+                message._mail_action = 'dropped';
                 message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
                 message._ip = entry.src;
                 message._body_size = entry.body;
@@ -701,7 +699,7 @@ module.exports.init = function(app, done) {
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
 
-                message._deleted = 'yes';
+                message._mail_action = 'dropped';
 
                 message._response = entry.reason;
                 break;
@@ -712,7 +710,7 @@ module.exports.init = function(app, done) {
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
 
-                message._dropped = 'yes';
+                message._mail_action = 'dropped';
 
                 message._response = entry.reason;
                 break;
