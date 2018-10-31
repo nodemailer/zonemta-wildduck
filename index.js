@@ -31,6 +31,10 @@ module.exports.init = function(app, done) {
               };
 
     const loggelf = message => {
+        if (!app.config.gelf || !app.config.gelf.enabled) {
+            return false;
+        }
+
         if (typeof message === 'string') {
             message = {
                 short_message: message
