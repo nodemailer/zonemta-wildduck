@@ -6,6 +6,7 @@ const MimeNode = require('nodemailer/lib/mime-node');
 const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
 const DkimHandler = require('wildduck/lib/dkim-handler');
+const wdErrors = require('wildduck/lib/errors');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
@@ -29,6 +30,7 @@ module.exports.init = function(app, done) {
                   // placeholder
                   emit: () => false
               };
+    wdErrors.setGelf(gelf);
 
     const loggelf = message => {
         if (!app.config.gelf || !app.config.gelf.enabled) {
