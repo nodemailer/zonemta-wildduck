@@ -548,7 +548,7 @@ module.exports.init = function(app, done) {
             delivery.dkim.keys = [];
         }
 
-        let from = delivery.envelope.from || '';
+        let from = (delivery.envelope.from || (delivery.parsedEnvelope && delivery.parsedEnvelope.from) || '').toString();
         let fromDomain = from.substr(from.lastIndexOf('@') + 1);
 
         let getKey = (domain, done) => {
