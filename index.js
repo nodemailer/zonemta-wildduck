@@ -509,38 +509,20 @@ module.exports.init = function(app, done) {
 
         let from = delivery.envelope.from || '';
 
-        let normalizedAddress = tools.normalizeAddress(from);
-        normalizedAddress =
-            normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
+        let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
+        let srsDomain = app.config.srs && app.config.srs.rewriteDomain;
+        try {
+            delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
+            delivery.headers.add('X-Original-Sender', from, Infinity);
+        } catch (E) {
+            // failed rewriting address, keep as is
+            app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
+        }
 
-        usersdb.collection('addresses').findOne(
-            {
-                addrview: normalizedAddress
-            },
-            (err, addressData) => {
-                if (err) {
-                    return next(err);
-                }
+        delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
+        delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
 
-                if (!addressData) {
-                    // sender is not a local address, so use SRS rewriting
-                    let fromDomain = from.substr(from.lastIndexOf('@') + 1).toLowerCase();
-                    let srsDomain = app.config.srs && app.config.srs.rewriteDomain;
-                    try {
-                        delivery.envelope.from = srsRewriter.rewrite(from.substr(0, from.lastIndexOf('@')), fromDomain) + '@' + srsDomain;
-                        delivery.headers.add('X-Original-Sender', from, Infinity);
-                    } catch (E) {
-                        // failed rewriting address, keep as is
-                        app.logger.error('SRS', '%s.%s SRSFAIL Failed rewriting "%s". %s', delivery.id, delivery.seq, from, E.message);
-                    }
-                }
-
-                delivery.headers.add('X-Zone-Forwarded-For', from, Infinity);
-                delivery.headers.add('X-Zone-Forwarded-To', delivery.envelope.to, Infinity);
-
-                next();
-            }
-        );
+        next();
     });
 
     app.addHook('sender:connect', (delivery, options, next) => {
