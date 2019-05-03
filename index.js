@@ -503,6 +503,11 @@ module.exports.init = function(app, done) {
 
     // rewrite MAIL FROM: for messages forwarded by user filter
     app.addHook('sender:headers', (delivery, connection, next) => {
+        // Forwarded header if present
+        if (delivery.forwardedFor) {
+            delivery.headers.addFormatted('X-Forwarded-For', delivery.forwardedFor, 0);
+        }
+
         if (!app.config.srs || !app.config.srs.enabled || !delivery.envelope.from || delivery.interface !== 'forwarder' || delivery.skipSRS) {
             return next();
         }
