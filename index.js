@@ -6,11 +6,13 @@ const MimeNode = require('nodemailer/lib/mime-node');
 const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
 const DkimHandler = require('wildduck/lib/dkim-handler');
+const AuditHandler = require('wildduck/lib/audit-handler');
 const wdErrors = require('wildduck/lib/errors');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
 const Gelf = require('gelf');
+const util = require('util');
 
 module.exports.title = 'WildDuck MSA';
 module.exports.init = function(app, done) {
@@ -92,6 +94,27 @@ module.exports.init = function(app, done) {
         users: usersdb,
         authlogExpireDays: app.config.authlogExpireDays,
         loggelf: message => loggelf(message)
+    });
+
+    const auditHandler = new AuditHandler({
+        database,
+        gridfs: gridfsdb,
+        users: usersdb,
+        bucket: 'audit',
+        loggelf: message => loggelf(message)
+    });
+
+    const encryptMessage = util.promisify(messageHandler.encryptMessage.bind(messageHandler));
+    const prepareMessage = util.promisify(messageHandler.prepareMessage.bind(messageHandler));
+
+    const addMessage = util.promisify((...args) => {
+        let callback = args.pop();
+        messageHandler.add(...args, (err, status, data) => {
+            if (err) {
+                return callback(err);
+            }
+            return callback(null, { status, data });
+        });
     });
 
     const interfaces = [].concat(app.config.interfaces || '*');
@@ -416,88 +439,169 @@ module.exports.init = function(app, done) {
                 return next(err);
             }
 
-            if (!userData.uploadSentMessages) {
-                return next();
-            }
-
-            if (userData.quota && userData.storageUsed > userData.quota) {
-                // skip upload, not enough storage
-                app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
-                return next();
-            }
-
-            let chunks = [
-                Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
-                envelope.headers.build()
-            ];
-            let chunklen = chunks[0].length + chunks[1].length;
-
-            let body = app.manager.queue.gridstore.openDownloadStreamByName('message ' + envelope.id);
-            body.on('readable', () => {
-                let chunk;
-                while ((chunk = body.read()) !== null) {
-                    chunks.push(chunk);
-                    chunklen += chunk.length;
-                }
-            });
-            body.once('error', err => next(err));
-            body.once('end', () => {
-                // Next we try to upload the message to Sent Mail folder
-                // It doesn't really matter if it succeeds or not so we are not waiting until it's done
-                setImmediate(next);
-
-                // from now on use `return;` to end sequence as next() is already called
-
-                if (app.config.disableUploads) {
-                    return; // do not upload messages to Sent Mail folder
-                }
-
-                let raw = Buffer.concat(chunks, chunklen);
-
-                // Checks if the message needs to be encrypted before storing it
-                messageHandler.encryptMessage(userData.encryptMessages ? userData.pubKey : false, raw, (err, encrypted) => {
-                    if (!err && encrypted) {
-                        // message was encrypted, so use the result instead of raw
-                        raw = encrypted;
+            database
+                .collection('audits')
+                .find({ user: userData._id })
+                .toArray((err, audits) => {
+                    if (err) {
+                        // ignore
+                        audits = [];
                     }
 
-                    messageHandler.add(
-                        {
-                            user: userData._id,
-                            specialUse: '\\Sent',
-
-                            outbound: envelope.id,
-
-                            meta: {
-                                source: 'SMTP',
-                                from: envelope.from,
-                                to: envelope.to,
-                                origin: envelope.origin,
-                                originhost: envelope.originhost,
-                                transhost: envelope.transhost,
-                                transtype: envelope.transtype,
-                                time: new Date()
-                            },
-
-                            date: false,
-                            flags: ['\\Seen'],
-                            raw,
-
-                            // if similar message exists, then skip
-                            skipExisting: true
-                        },
-                        (err, success, info) => {
-                            if (err) {
-                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
-                            } else if (info) {
-                                app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, info.uid);
-                            } else {
-                                app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
-                            }
+                    let now = new Date();
+                    audits = audits.filter(auditData => {
+                        if (auditData.start && auditData.start > now) {
+                            return false;
                         }
-                    );
+                        if (auditData.end && auditData.end < now) {
+                            return false;
+                        }
+                        return true;
+                    });
+
+                    let overQuota = userData.quota && userData.storageUsed > userData.quota;
+                    let addToSent = userData.uploadSentMessages && !overQuota && !app.config.disableUploads;
+
+                    if (overQuota) {
+                        // not enough storage
+                        app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
+                        if (!audits.length) {
+                            return next();
+                        }
+                    }
+
+                    if (!addToSent && !audits.length) {
+                        // nothing to do here
+                        return next();
+                    }
+
+                    let chunks = [
+                        Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
+                        envelope.headers.build()
+                    ];
+                    let chunklen = chunks[0].length + chunks[1].length;
+
+                    let body = app.manager.queue.gridstore.openDownloadStreamByName('message ' + envelope.id);
+                    body.on('readable', () => {
+                        let chunk;
+                        while ((chunk = body.read()) !== null) {
+                            chunks.push(chunk);
+                            chunklen += chunk.length;
+                        }
+                    });
+                    body.once('error', err => next(err));
+                    body.once('end', () => {
+                        // Next we try to upload the message to Sent Mail folder
+                        // It doesn't really matter if it succeeds or not so we are not waiting until it's done
+                        setImmediate(next);
+
+                        // from now on use `return;` to end sequence as next() is already called
+
+                        let raw = Buffer.concat(chunks, chunklen);
+
+                        let storeSentMessage = async () => {
+                            // Checks if the message needs to be encrypted before storing it
+                            let messageSource = raw;
+
+                            if (userData.encryptMessages && userData.pubKey) {
+                                try {
+                                    let encrypted = await encryptMessage(userData.pubKey, raw);
+                                    if (encrypted) {
+                                        messageSource = encrypted;
+                                    }
+                                } catch (err) {
+                                    // ignore
+                                }
+                            }
+                            try {
+                                let { data } = await addMessage({
+                                    user: userData._id,
+                                    specialUse: '\\Sent',
+
+                                    outbound: envelope.id,
+
+                                    meta: {
+                                        source: 'SMTP',
+                                        queueId: envelope.id,
+                                        from: envelope.from,
+                                        to: envelope.to,
+                                        origin: envelope.origin,
+                                        originhost: envelope.originhost,
+                                        transhost: envelope.transhost,
+                                        transtype: envelope.transtype,
+                                        time: new Date()
+                                    },
+
+                                    date: false,
+                                    flags: ['\\Seen'],
+                                    raw: messageSource,
+
+                                    // if similar message exists, then skip
+                                    skipExisting: true
+                                });
+                                if (data) {
+                                    app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, data.uid);
+                                } else {
+                                    app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                                }
+                            } catch (err) {
+                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
+                            }
+                        };
+
+                        let processAudits = async () => {
+                            const messageData = await prepareMessage({
+                                raw
+                            });
+
+                            if (messageData.attachments && messageData.attachments.length) {
+                                messageData.ha = messageData.attachments.some(a => !a.related);
+                            } else {
+                                messageData.ha = false;
+                            }
+
+                            for (let auditData of audits) {
+                                const auditMessage = await auditHandler.store(auditData._id, raw, {
+                                    date: now,
+                                    msgid: messageData,
+                                    header: messageData.mimeTree && messageData.mimeTree.parsedHeader,
+                                    ha: messageData.ha,
+                                    info: {
+                                        source: 'SMTP',
+                                        queueId: envelope.id,
+                                        from: envelope.from,
+                                        to: envelope.to,
+                                        origin: envelope.origin,
+                                        originhost: envelope.originhost,
+                                        transhost: envelope.transhost,
+                                        transtype: envelope.transtype,
+                                        time: new Date()
+                                    }
+                                });
+                                app.logger.verbose(
+                                    'Rewrite',
+                                    '%s AUDITUPL user=%s coll=%s message=%s msgid=%s dst=%s',
+                                    envelope.id,
+                                    envelope.user,
+                                    'Stored message to audit base',
+                                    messageData.msgid,
+                                    auditMessage
+                                );
+                            }
+                        };
+
+                        if (addToSent) {
+                            // addMessage also calls audit methods
+                            storeSentMessage().catch(err =>
+                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
+                            );
+                        } else {
+                            processAudits().catch(err =>
+                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
+                            );
+                        }
+                    });
                 });
-            });
         });
     });
 
@@ -597,6 +701,12 @@ module.exports.init = function(app, done) {
             _queue_id_seq: (entry.seq || '').toString()
         };
 
+        let updateAudited = (status, info) => {
+            auditHandler
+                .updateDeliveryStatus(entry.id, entry.seq, status, info)
+                .catch(err => app.logger.error('Rewrite', '%s.%s LOGERR %s', entry.id, entry.seq, err.message));
+        };
+
         switch (entry.action) {
             case 'QUEUED':
                 {
@@ -631,6 +741,12 @@ module.exports.init = function(app, done) {
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
                 message._response = entry.response;
+                updateAudited('accepted', {
+                    to: (entry.to || '').toString(),
+                    response: entry.response,
+                    mx: entry.mx,
+                    local_ip: entry.ip
+                });
                 break;
 
             case 'DEFERRED':
@@ -649,6 +765,12 @@ module.exports.init = function(app, done) {
                 message._local_ip = entry.ip;
 
                 message._response = entry.response;
+                updateAudited('deferred', {
+                    to: (entry.to || '').toString(),
+                    response: entry.response,
+                    mx: entry.mx,
+                    local_ip: entry.ip
+                });
                 break;
 
             case 'REJECTED':
@@ -667,6 +789,12 @@ module.exports.init = function(app, done) {
                 message._local_ip = entry.ip;
 
                 message._response = entry.response;
+                updateAudited('rejected', {
+                    to: (entry.to || '').toString(),
+                    response: entry.response,
+                    mx: entry.mx,
+                    local_ip: entry.ip
+                });
                 break;
 
             case 'NOQUEUE':
