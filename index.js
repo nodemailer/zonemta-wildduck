@@ -563,7 +563,7 @@ module.exports.init = function(app, done) {
                             for (let auditData of audits) {
                                 const auditMessage = await auditHandler.store(auditData._id, raw, {
                                     date: now,
-                                    msgid: messageData,
+                                    msgid: messageData.msgid,
                                     header: messageData.mimeTree && messageData.mimeTree.parsedHeader,
                                     ha: messageData.ha,
                                     info: {
