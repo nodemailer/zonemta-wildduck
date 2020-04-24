@@ -265,7 +265,7 @@ module.exports.init = function (app, done) {
                         })
                     ) {
                         // generate address object for whitelisted address
-                        let normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
+                        let normalizedAddress = tools.normalizeAddress(address);
                         normalizedAddress =
                             normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') +
                             normalizedAddress.substr(normalizedAddress.indexOf('@'));
