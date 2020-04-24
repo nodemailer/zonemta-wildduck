@@ -1,6 +1,6 @@
 {
     "name": "zonemta-wildduck",
-    "version": "1.25.0",
+    "version": "1.25.1",
     "description": "WildDuck MSA plugin for ZoneMTA",
     "main": "index.js",
     "author": "Andris Reinman",
