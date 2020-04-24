@@ -15,7 +15,7 @@ const Gelf = require('gelf');
 const util = require('util');
 
 module.exports.title = 'WildDuck MSA';
-module.exports.init = function(app, done) {
+module.exports.init = function (app, done) {
     const users = new WeakMap();
 
     const redisClient = app.db.redis;
@@ -30,18 +30,18 @@ module.exports.init = function(app, done) {
             ? new Gelf(app.config.gelf.options)
             : {
                   // placeholder
-                  emit: () => false
+                  emit: () => false,
               };
     wdErrors.setGelf(gelf);
 
-    const loggelf = message => {
+    const loggelf = (message) => {
         if (!app.config.gelf || !app.config.gelf.enabled) {
             return false;
         }
 
         if (typeof message === 'string') {
             message = {
-                short_message: message
+                short_message: message,
             };
         }
         message = message || {};
@@ -54,7 +54,7 @@ module.exports.init = function(app, done) {
         message.host = hostname;
         message.timestamp = Date.now() / 1000;
         message._component = app.config.gelf.component || 'mta';
-        Object.keys(message).forEach(key => {
+        Object.keys(message).forEach((key) => {
             if (!message[key]) {
                 delete message[key];
             }
@@ -66,13 +66,13 @@ module.exports.init = function(app, done) {
         cipher: app.config.dkim && app.config.dkim.cipher,
         secret: app.config.dkim && app.config.dkim.secret,
         database: app.db.database,
-        loggelf: message => loggelf(message)
+        loggelf: (message) => loggelf(message),
     });
 
     const ttlcounter = counters(redisClient).ttlcounter;
 
     const srsRewriter = new SRS({
-        secret: (app.config.srs && app.config.srs.secret) || '?'
+        secret: (app.config.srs && app.config.srs.secret) || '?',
     });
 
     const messageHandler = new MessageHandler({
@@ -82,9 +82,9 @@ module.exports.init = function(app, done) {
         gridfs: gridfsdb,
         attachments: app.config.attachments || {
             type: 'gridstore',
-            bucket: 'attachments'
+            bucket: 'attachments',
         },
-        loggelf: message => loggelf(message)
+        loggelf: (message) => loggelf(message),
     });
 
     const userHandler = new UserHandler({
@@ -93,7 +93,7 @@ module.exports.init = function(app, done) {
         gridfs: gridfsdb,
         users: usersdb,
         authlogExpireDays: app.config.authlogExpireDays,
-        loggelf: message => loggelf(message)
+        loggelf: (message) => loggelf(message),
     });
 
     const auditHandler = new AuditHandler({
@@ -101,7 +101,7 @@ module.exports.init = function(app, done) {
         gridfs: gridfsdb,
         users: usersdb,
         bucket: 'audit',
-        loggelf: message => loggelf(message)
+        loggelf: (message) => loggelf(message),
     });
 
     const encryptMessage = util.promisify(messageHandler.encryptMessage.bind(messageHandler));
@@ -148,7 +148,7 @@ module.exports.init = function(app, done) {
                         _xclient: 'yes',
 
                         _session_id: session.id,
-                        _ip: session.remoteAddress
+                        _ip: session.remoteAddress,
                     });
 
                     return next(err);
@@ -165,7 +165,7 @@ module.exports.init = function(app, done) {
             'smtp',
             {
                 protocol: 'SMTP',
-                ip: session.remoteAddress
+                ip: session.remoteAddress,
             },
             (err, result) => {
                 if (err) {
@@ -189,7 +189,7 @@ module.exports.init = function(app, done) {
                         _require_asp: result ? 'yes' : '',
 
                         _session_id: session.id,
-                        _ip: session.remoteAddress
+                        _ip: session.remoteAddress,
                     });
 
                     return next(err);
@@ -204,7 +204,7 @@ module.exports.init = function(app, done) {
                     _scope: result.scope,
 
                     _session_id: session.id,
-                    _ip: session.remoteAddress
+                    _ip: session.remoteAddress,
                 });
 
                 auth.username = result.username + '[' + auth.username + ']';
@@ -246,6 +246,37 @@ module.exports.init = function(app, done) {
                 normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') + normalizedAddress.substr(normalizedAddress.indexOf('@'));
 
             let checkAddress = (address, done) => {
+                if (userData.fromWhitelist && userData.fromWhitelist.length) {
+                    if (
+                        userData.fromWhitelist.some((addr) => {
+                            if (addr === address) {
+                                return true;
+                            }
+
+                            if (addr.charAt(0) === '*' && address.indexOf(addr.substr(1)) >= 0) {
+                                return true;
+                            }
+
+                            if (addr.charAt(addr.length - 1) === '*' && address.indexOf(addr.substr(0, addr.length - 1)) === 0) {
+                                return true;
+                            }
+
+                            return false;
+                        })
+                    ) {
+                        // generate address object for whitelisted address
+                        let normalizedAddress = tools.normalizeAddress(Buffer.from(headerFromObj.address, 'binary').toString());
+                        normalizedAddress =
+                            normalizedAddress.substr(0, normalizedAddress.indexOf('@')).replace(/\./g, '') +
+                            normalizedAddress.substr(normalizedAddress.indexOf('@'));
+
+                        return done(null, {
+                            address,
+                            addrview: normalizedAddress,
+                        });
+                    }
+                }
+
                 userHandler.resolveAddress(address, { wildcard: true }, (err, addressData) => {
                     if (err) {
                         return done(err);
@@ -264,7 +295,7 @@ module.exports.init = function(app, done) {
                     }
 
                     if (addressData.targets) {
-                        if (addressData.targets.find(target => target.user && target.user.toString() === userData._id.toString())) {
+                        if (addressData.targets.find((target) => target.user && target.user.toString() === userData._id.toString())) {
                             return done(null, addressData);
                         } else {
                             return done(null, false);
@@ -285,7 +316,7 @@ module.exports.init = function(app, done) {
                         _mail_action: 'rw_envelope_from',
                         _queue_id: envelope.id,
                         _envelope_from: envelope.from,
-                        _rewrite_from: userData.address
+                        _rewrite_from: userData.address,
                     });
 
                     // replace MAIL FROM address
@@ -328,7 +359,7 @@ module.exports.init = function(app, done) {
                         _mail_action: 'rw_header_from',
                         _queue_id: envelope.id,
                         _header_from: headerFromObj.address,
-                        _rewrite_from: envelope.from
+                        _rewrite_from: envelope.from,
                     });
 
                     app.logger.info(
@@ -395,7 +426,7 @@ module.exports.init = function(app, done) {
                         _mail_action: 'rcpt_to',
                         _daily: 'yes',
                         _rate_limit: 'yes',
-                        _error: 'daily sending limit reached'
+                        _error: 'daily sending limit reached',
                     });
 
                     app.logger.info(
@@ -419,7 +450,7 @@ module.exports.init = function(app, done) {
                     _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
                     _to: address.address,
                     _mail_action: 'rcpt_to',
-                    _allowed: 'yes'
+                    _allowed: 'yes',
                 });
 
                 app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
@@ -449,7 +480,7 @@ module.exports.init = function(app, done) {
                     }
 
                     let now = new Date();
-                    audits = audits.filter(auditData => {
+                    audits = audits.filter((auditData) => {
                         if (auditData.start && auditData.start > now) {
                             return false;
                         }
@@ -477,7 +508,7 @@ module.exports.init = function(app, done) {
 
                     let chunks = [
                         Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
-                        envelope.headers.build()
+                        envelope.headers.build(),
                     ];
                     let chunklen = chunks[0].length + chunks[1].length;
 
@@ -489,7 +520,7 @@ module.exports.init = function(app, done) {
                             chunklen += chunk.length;
                         }
                     });
-                    body.once('error', err => next(err));
+                    body.once('error', (err) => next(err));
                     body.once('end', () => {
                         // Next we try to upload the message to Sent Mail folder
                         // It doesn't really matter if it succeeds or not so we are not waiting until it's done
@@ -529,7 +560,7 @@ module.exports.init = function(app, done) {
                                         originhost: envelope.originhost,
                                         transhost: envelope.transhost,
                                         transtype: envelope.transtype,
-                                        time: new Date()
+                                        time: new Date(),
                                     },
 
                                     date: false,
@@ -537,7 +568,7 @@ module.exports.init = function(app, done) {
                                     raw: messageSource,
 
                                     // if similar message exists, then skip
-                                    skipExisting: true
+                                    skipExisting: true,
                                 });
                                 if (data) {
                                     app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, data.uid);
@@ -551,11 +582,11 @@ module.exports.init = function(app, done) {
 
                         let processAudits = async () => {
                             const messageData = await prepareMessage({
-                                raw
+                                raw,
                             });
 
                             if (messageData.attachments && messageData.attachments.length) {
-                                messageData.ha = messageData.attachments.some(a => !a.related);
+                                messageData.ha = messageData.attachments.some((a) => !a.related);
                             } else {
                                 messageData.ha = false;
                             }
@@ -575,8 +606,8 @@ module.exports.init = function(app, done) {
                                         originhost: envelope.originhost,
                                         transhost: envelope.transhost,
                                         transtype: envelope.transtype,
-                                        time: new Date()
-                                    }
+                                        time: new Date(),
+                                    },
                                 });
                                 app.logger.verbose(
                                     'Rewrite',
@@ -592,11 +623,11 @@ module.exports.init = function(app, done) {
 
                         if (addToSent) {
                             // addMessage also calls audit methods
-                            storeSentMessage().catch(err =>
+                            storeSentMessage().catch((err) =>
                                 app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
                             );
                         } else {
-                            processAudits().catch(err =>
+                            processAudits().catch((err) =>
                                 app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
                             );
                         }
@@ -672,11 +703,11 @@ module.exports.init = function(app, done) {
                 delivery.dkim.keys.push({
                     domainName: tools.normalizeDomain(fromDomain),
                     keySelector: keyData.selector,
-                    privateKey: keyData.privateKey
+                    privateKey: keyData.privateKey,
                 });
             }
 
-            if (!app.config.signTransportDomain || delivery.dkim.keys.find(key => key.domainName === delivery.zoneAddress.name)) {
+            if (!app.config.signTransportDomain || delivery.dkim.keys.find((key) => key.domainName === delivery.zoneAddress.name)) {
                 return next();
             }
 
@@ -685,7 +716,7 @@ module.exports.init = function(app, done) {
                     delivery.dkim.keys.push({
                         domainName: tools.normalizeDomain(delivery.zoneAddress.name),
                         keySelector: keyData.selector,
-                        privateKey: keyData.privateKey
+                        privateKey: keyData.privateKey,
                     });
                 }
                 return next();
@@ -698,13 +729,13 @@ module.exports.init = function(app, done) {
 
         let message = {
             _queue_id: (entry.id || '').toString(),
-            _queue_id_seq: (entry.seq || '').toString()
+            _queue_id_seq: (entry.seq || '').toString(),
         };
 
         let updateAudited = (status, info) => {
             auditHandler
                 .updateDeliveryStatus(entry.id, entry.seq, status, info)
-                .catch(err => app.logger.error('Rewrite', '%s.%s LOGERR %s', entry.id, entry.seq, err.message));
+                .catch((err) => app.logger.error('Rewrite', '%s.%s LOGERR %s', entry.id, entry.seq, err.message));
         };
 
         switch (entry.action) {
@@ -745,7 +776,7 @@ module.exports.init = function(app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip
+                    local_ip: entry.ip,
                 });
                 break;
 
@@ -769,7 +800,7 @@ module.exports.init = function(app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip
+                    local_ip: entry.ip,
                 });
                 break;
 
@@ -793,7 +824,7 @@ module.exports.init = function(app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip
+                    local_ip: entry.ip,
                 });
                 break;
 
@@ -861,7 +892,7 @@ module.exports.init = function(app, done) {
 
         if (envelope.user) {
             query = {
-                username: envelope.user.split('[').shift()
+                username: envelope.user.split('[').shift(),
             };
         }
 
@@ -883,8 +914,11 @@ module.exports.init = function(app, done) {
                     recipients: true,
                     encryptMessages: true,
                     pubKey: true,
-                    uploadSentMessages: true
-                }
+                    uploadSentMessages: true,
+                    disabled: true,
+                    suspended: true,
+                    fromWhitelist: true,
+                },
             },
             (err, user) => {
                 if (err) {
@@ -893,6 +927,13 @@ module.exports.init = function(app, done) {
 
                 if (!user) {
                     let err = new Error('User "' + query.username + '" was not found');
+                    err.responseCode = 550;
+                    err.name = 'SMTPResponse'; // do not throw
+                    return callback(err);
+                }
+
+                if (user.disabled || user.suspended) {
+                    let err = new Error('User "' + query.username + '" is currently disabled');
                     err.responseCode = 550;
                     err.name = 'SMTPResponse'; // do not throw
                     return callback(err);
