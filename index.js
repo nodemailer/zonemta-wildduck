@@ -675,7 +675,7 @@ module.exports.init = function (app, done) {
 
         let getKey = (domain, done) => {
             dkimHandler.get({ domain }, true, (err, keyData) => {
-                if (err) {
+                if (err && err.code !== 'DkimNotFound') {
                     return done(err);
                 }
                 if (keyData) {
