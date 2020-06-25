@@ -386,6 +386,29 @@ module.exports.init = function (app, done) {
     });
 
     // Check if the user can send to yet another recipient
+    app.addHook('smtp:mail_from', (address, session, next) => {
+        if (!checkInterface(session.interface)) {
+            return next();
+        }
+        getUser(session, (err, userData) => {
+            if (err) {
+                return next(err);
+            }
+
+            if (!userData.recipients) {
+                return next();
+            }
+
+            ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, false, (err /*, result*/) => {
+                if (err) {
+                    return next(err);
+                }
+                next();
+            });
+        });
+    });
+
+    // Check if the user can send to yet another recipient
     app.addHook('smtp:rcpt_to', (address, session, next) => {
         if (!checkInterface(session.interface)) {
             return next();
@@ -665,7 +688,14 @@ module.exports.init = function (app, done) {
         next();
     });
 
-    app.addHook('sender:connect', (delivery, options, next) => {
+    const dkimMarker = new WeakSet();
+    const connectionHandler = (delivery, next) => {
+        if (dkimMarker.has(delivery)) {
+            // do not process DKIM multiple times for the same message
+            return;
+        }
+        dkimMarker.add(delivery);
+
         if (!delivery.dkim.keys) {
             delivery.dkim.keys = [];
         }
@@ -722,7 +752,11 @@ module.exports.init = function (app, done) {
                 return next();
             });
         });
-    });
+    };
+
+    // "old" connection handler called when a connection to MX is being
+    app.addHook('sender:connect', (delivery, options, next) => connectionHandler(delivery, next));
+    app.addHook('sender:connection', (delivery, connection, next) => connectionHandler(delivery, next));
 
     app.addHook('log:entry', (entry, next) => {
         entry.created = new Date();
