@@ -692,7 +692,7 @@ module.exports.init = function (app, done) {
     const connectionHandler = (delivery, next) => {
         if (dkimMarker.has(delivery)) {
             // do not process DKIM multiple times for the same message
-            return;
+            return next();
         }
         dkimMarker.add(delivery);
 
