@@ -359,6 +359,7 @@ module.exports.init = function (app, done) {
                         _mail_action: 'rw_header_from',
                         _queue_id: envelope.id,
                         _header_from: headerFromObj.address,
+                        _header_from_value: headerFrom,
                         _rewrite_from: envelope.from,
                     });
 
@@ -766,6 +767,20 @@ module.exports.init = function (app, done) {
             _queue_id_seq: (entry.seq || '').toString(),
         };
 
+        let headerFrom = entry.headerFrom;
+        let headerFromList;
+        let headerFromObj;
+
+        if (headerFrom) {
+            headerFromList = addressparser(headerFrom);
+            if (headerFromList.length) {
+                headerFromObj = headerFromList[0] || {};
+                if (headerFromObj.group) {
+                    headerFromObj = {};
+                }
+            }
+        }
+
         let updateAudited = (status, info) => {
             auditHandler
                 .updateDeliveryStatus(entry.id, entry.seq, status, info)
@@ -791,7 +806,10 @@ module.exports.init = function (app, done) {
                     message._interface = entry.interface;
                     message._proto = entry.transtype;
                     message._subject = entry.subject;
-                    message._header_from = entry.headerFrom;
+
+                    message._header_from = headerFromObj.address;
+                    message._header_from_value = headerFrom;
+
                     message._authenticated_sender = username;
                 }
                 break;
@@ -805,7 +823,12 @@ module.exports.init = function (app, done) {
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
+
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
+
                 message._response = entry.response;
+
                 updateAudited('accepted', {
                     to: (entry.to || '').toString(),
                     response: entry.response,
@@ -829,7 +852,11 @@ module.exports.init = function (app, done) {
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
 
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
+
                 message._response = entry.response;
+
                 updateAudited('deferred', {
                     to: (entry.to || '').toString(),
                     response: entry.response,
@@ -853,7 +880,11 @@ module.exports.init = function (app, done) {
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
 
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
+
                 message._response = entry.response;
+
                 updateAudited('rejected', {
                     to: (entry.to || '').toString(),
                     response: entry.response,
@@ -876,6 +907,9 @@ module.exports.init = function (app, done) {
                 message._interface = entry.interface;
                 message._proto = entry.transtype;
 
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
+
                 message._response = entry.responseText;
                 break;
 
@@ -887,6 +921,9 @@ module.exports.init = function (app, done) {
 
                 message._mail_action = 'dropped';
 
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
+
                 message._response = entry.reason;
                 break;
 
@@ -897,6 +934,9 @@ module.exports.init = function (app, done) {
                 message._to = (entry.to || '').toString();
 
                 message._mail_action = 'dropped';
+
+                message._header_from = headerFromObj.address;
+                message._header_from_value = headerFrom;
 
                 message._response = entry.reason;
                 break;
