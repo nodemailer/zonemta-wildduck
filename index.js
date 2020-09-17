@@ -13,6 +13,7 @@ const tools = require('wildduck/lib/tools');
 const SRS = require('srs.js');
 const Gelf = require('gelf');
 const util = require('util');
+const libmime = require('libmime');
 
 module.exports.title = 'WildDuck MSA';
 module.exports.init = function (app, done) {
@@ -223,6 +224,7 @@ module.exports.init = function (app, done) {
         let headerFrom = envelope.headers.getFirst('from');
         let headerFromList;
         let headerFromObj;
+        let headerFromName;
 
         if (headerFrom) {
             headerFromList = addressparser(headerFrom);
@@ -230,6 +232,13 @@ module.exports.init = function (app, done) {
                 headerFromObj = headerFromList[0] || {};
                 if (headerFromObj.group) {
                     headerFromObj = {};
+                }
+                if (headerFromObj.name) {
+                    try {
+                        headerFromName = libmime.decodeWords(headerFromObj.name).trim();
+                    } catch (err) {
+                        headerFromName = headerFromObj.name;
+                    }
                 }
             }
         }
@@ -358,8 +367,9 @@ module.exports.init = function (app, done) {
                         short_message: '[RWFROM] ' + envelope.id,
                         _mail_action: 'rw_header_from',
                         _queue_id: envelope.id,
-                        _header_from: headerFromObj.address,
+                        _header_from: tools.normalizeAddress(headerFromObj.address),
                         _header_from_value: headerFrom,
+                        _header_from_name: headerFromName,
                         _rewrite_from: envelope.from,
                     });
 
@@ -770,14 +780,25 @@ module.exports.init = function (app, done) {
         let headerFrom = entry.headerFrom;
         let headerFromList;
         let headerFromObj;
+        let headerFromName;
 
         if (headerFrom) {
+            message._header_from_value = headerFrom;
             headerFromList = addressparser(headerFrom);
             if (headerFromList.length) {
                 headerFromObj = headerFromList[0] || {};
                 if (headerFromObj.group) {
                     headerFromObj = {};
                 }
+                if (headerFromObj.name) {
+                    try {
+                        headerFromName = libmime.decodeWords(headerFromObj.name).trim();
+                    } catch (err) {
+                        headerFromName = headerFromObj.name;
+                    }
+                    message._header_from_name = headerFromName;
+                }
+                message._header_from = tools.normalizeAddress(headerFromObj.address);
             }
         }
 
@@ -807,9 +828,6 @@ module.exports.init = function (app, done) {
                     message._proto = entry.transtype;
                     message._subject = entry.subject;
 
-                    message._header_from = headerFromObj.address;
-                    message._header_from_value = headerFrom;
-
                     message._authenticated_sender = username;
                 }
                 break;
@@ -823,9 +841,6 @@ module.exports.init = function (app, done) {
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
-
-                message._header_from = headerFromObj.address;
-                message._header_from_value = headerFrom;
 
                 message._response = entry.response;
 
@@ -852,9 +867,6 @@ module.exports.init = function (app, done) {
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
 
-                message._header_from = headerFromObj.address;
-                message._header_from_value = headerFrom;
-
                 message._response = entry.response;
 
                 updateAudited('deferred', {
@@ -880,9 +892,6 @@ module.exports.init = function (app, done) {
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
 
-                message._header_from = headerFromObj.address;
-                message._header_from_value = headerFrom;
-
                 message._response = entry.response;
 
                 updateAudited('rejected', {
@@ -906,9 +915,6 @@ module.exports.init = function (app, done) {
                 message._spam_score = Number(entry.score) || '';
                 message._interface = entry.interface;
                 message._proto = entry.transtype;
-
-                message._header_from = headerFromObj.address;
-                message._header_from_value = headerFrom;
 
                 message._response = entry.responseText;
                 break;
@@ -934,9 +940,6 @@ module.exports.init = function (app, done) {
                 message._to = (entry.to || '').toString();
 
                 message._mail_action = 'dropped';
-
-                message._header_from = headerFromObj.address;
-                message._header_from_value = headerFrom;
 
                 message._response = entry.reason;
                 break;
