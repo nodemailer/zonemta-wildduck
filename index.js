@@ -410,10 +410,11 @@ module.exports.init = function (app, done) {
                 return next();
             }
 
-            ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, false, (err /*, result*/) => {
+            ttlcounter('wdr:' + userData._id.toString(), 0, userData.recipients, false, (err, result) => {
                 if (err) {
                     return next(err);
                 }
+                session.rcptCounter = result;
                 next();
             });
         });
@@ -433,63 +434,69 @@ module.exports.init = function (app, done) {
                 return next();
             }
 
-            ttlcounter('wdr:' + userData._id.toString(), 1, userData.recipients, false, (err, result) => {
-                if (err) {
-                    return next(err);
+            let success = session.rcptCounter.success;
+            let sent = session.rcptCounter.value + ((session.envelope.rcptTo && session.envelope.rcptTo.length) || 0);
+            let ttl = session.rcptCounter.ttl;
+
+            let ttlHuman = false;
+            if (ttl) {
+                if (ttl < 60) {
+                    ttlHuman = ttl + ' seconds';
+                } else if (ttl < 3600) {
+                    ttlHuman = Math.round(ttl / 60) + ' minutes';
+                } else {
+                    ttlHuman = Math.round(ttl / 3600) + ' hours';
                 }
+            }
 
-                let success = result.success;
-                let sent = result.value;
-                let ttl = result.ttl;
-
-                let ttlHuman = false;
-                if (ttl) {
-                    if (ttl < 60) {
-                        ttlHuman = ttl + ' seconds';
-                    } else if (ttl < 3600) {
-                        ttlHuman = Math.round(ttl / 60) + ' minutes';
-                    } else {
-                        ttlHuman = Math.round(ttl / 3600) + ' hours';
-                    }
-                }
-
-                if (!success) {
-                    loggelf({
-                        short_message: '[RCPT TO:' + address.address + '] ' + session.id,
-                        _to: address.address,
-                        _mail_action: 'rcpt_to',
-                        _daily: 'yes',
-                        _rate_limit: 'yes',
-                        _error: 'daily sending limit reached',
-                    });
-
-                    app.logger.info(
-                        'Sender',
-                        '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.',
-                        session.envelopeId,
-                        address.address,
-                        sent,
-                        userData.recipients,
-                        ttl
-                    );
-                    let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
-                    err.responseCode = 550;
-                    err.name = 'SMTPResponse';
-                    return setImmediate(() => next(err));
-                }
-
+            if (!success) {
                 loggelf({
                     short_message: '[RCPT TO:' + address.address + '] ' + session.id,
-                    _user: userData._id.toString(),
-                    _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
                     _to: address.address,
                     _mail_action: 'rcpt_to',
-                    _allowed: 'yes',
+                    _allowed: 'no',
+                    _daily: 'yes',
+                    _rate_limit: 'yes',
+                    _error: 'daily sending limit reached',
+                    _error_message: 'You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''),
+                    _user: userData._id.toString(),
+                    _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
+                    _queue_id: session.envelopeId,
+                    _limit_sent: sent,
+                    _limit_allowed: userData.recipients,
+                    _sess: session.id,
                 });
 
-                app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
-                next();
+                app.logger.info(
+                    'Sender',
+                    '%s RCPTDENY denied %s sent=%s allowed=%s expires=%ss.',
+                    session.envelopeId,
+                    address.address,
+                    sent,
+                    userData.recipients,
+                    ttl
+                );
+                let err = new Error('You reached a daily sending limit for your account' + (ttl ? '. Limit expires in ' + ttlHuman : ''));
+                err.responseCode = 550;
+                err.name = 'SMTPResponse';
+                return setImmediate(() => next(err));
+            }
+
+            loggelf({
+                short_message: '[RCPT TO:' + address.address + '] ' + session.id,
+                _user: userData._id.toString(),
+                _from: session.envelope.mailFrom && session.envelope.mailFrom.address,
+                _to: address.address,
+                _mail_action: 'rcpt_to',
+                _allowed: 'yes',
+                _queue_id: session.envelopeId,
+                _limit_sent: sent,
+                _limit_allowed: userData.recipients,
+                _sess: session.id,
             });
+
+            app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
+            next();
         });
     });
 
@@ -504,169 +511,173 @@ module.exports.init = function (app, done) {
                 return next(err);
             }
 
-            database
-                .collection('audits')
-                .find({ user: userData._id })
-                .toArray((err, audits) => {
-                    if (err) {
-                        // ignore
-                        audits = [];
-                    }
+            ttlcounter('wdr:' + userData._id.toString(), envelope.rcptTo.length, userData.recipients, false, (/*err, result*/) => {
+                // at his point we only update the counter but do not care about the result as message is already queued for delivery
 
-                    let now = new Date();
-                    audits = audits.filter((auditData) => {
-                        if (auditData.start && auditData.start > now) {
-                            return false;
+                database
+                    .collection('audits')
+                    .find({ user: userData._id })
+                    .toArray((err, audits) => {
+                        if (err) {
+                            // ignore
+                            audits = [];
                         }
-                        if (auditData.end && auditData.end < now) {
-                            return false;
+
+                        let now = new Date();
+                        audits = audits.filter((auditData) => {
+                            if (auditData.start && auditData.start > now) {
+                                return false;
+                            }
+                            if (auditData.end && auditData.end < now) {
+                                return false;
+                            }
+                            return true;
+                        });
+
+                        let overQuota = userData.quota && userData.storageUsed > userData.quota;
+                        let addToSent = userData.uploadSentMessages && !overQuota && !app.config.disableUploads;
+
+                        if (overQuota) {
+                            // not enough storage
+                            app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
+                            if (!audits.length) {
+                                return next();
+                            }
                         }
-                        return true;
-                    });
 
-                    let overQuota = userData.quota && userData.storageUsed > userData.quota;
-                    let addToSent = userData.uploadSentMessages && !overQuota && !app.config.disableUploads;
-
-                    if (overQuota) {
-                        // not enough storage
-                        app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=over quota', envelope.id, envelope.user);
-                        if (!audits.length) {
+                        if (!addToSent && !audits.length) {
+                            // nothing to do here
                             return next();
                         }
-                    }
 
-                    if (!addToSent && !audits.length) {
-                        // nothing to do here
-                        return next();
-                    }
+                        let chunks = [
+                            Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
+                            envelope.headers.build(),
+                        ];
+                        let chunklen = chunks[0].length + chunks[1].length;
 
-                    let chunks = [
-                        Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
-                        envelope.headers.build(),
-                    ];
-                    let chunklen = chunks[0].length + chunks[1].length;
+                        let body = app.manager.queue.gridstore.openDownloadStreamByName('message ' + envelope.id);
+                        body.on('readable', () => {
+                            let chunk;
+                            while ((chunk = body.read()) !== null) {
+                                chunks.push(chunk);
+                                chunklen += chunk.length;
+                            }
+                        });
+                        body.once('error', (err) => next(err));
+                        body.once('end', () => {
+                            // Next we try to upload the message to Sent Mail folder
+                            // It doesn't really matter if it succeeds or not so we are not waiting until it's done
+                            setImmediate(next);
 
-                    let body = app.manager.queue.gridstore.openDownloadStreamByName('message ' + envelope.id);
-                    body.on('readable', () => {
-                        let chunk;
-                        while ((chunk = body.read()) !== null) {
-                            chunks.push(chunk);
-                            chunklen += chunk.length;
-                        }
-                    });
-                    body.once('error', (err) => next(err));
-                    body.once('end', () => {
-                        // Next we try to upload the message to Sent Mail folder
-                        // It doesn't really matter if it succeeds or not so we are not waiting until it's done
-                        setImmediate(next);
+                            // from now on use `return;` to end sequence as next() is already called
 
-                        // from now on use `return;` to end sequence as next() is already called
+                            let raw = Buffer.concat(chunks, chunklen);
 
-                        let raw = Buffer.concat(chunks, chunklen);
+                            let storeSentMessage = async () => {
+                                // Checks if the message needs to be encrypted before storing it
+                                let messageSource = raw;
 
-                        let storeSentMessage = async () => {
-                            // Checks if the message needs to be encrypted before storing it
-                            let messageSource = raw;
-
-                            if (userData.encryptMessages && userData.pubKey) {
+                                if (userData.encryptMessages && userData.pubKey) {
+                                    try {
+                                        let encrypted = await encryptMessage(userData.pubKey, raw);
+                                        if (encrypted) {
+                                            messageSource = encrypted;
+                                        }
+                                    } catch (err) {
+                                        // ignore
+                                    }
+                                }
                                 try {
-                                    let encrypted = await encryptMessage(userData.pubKey, raw);
-                                    if (encrypted) {
-                                        messageSource = encrypted;
+                                    let { data } = await addMessage({
+                                        user: userData._id,
+                                        specialUse: '\\Sent',
+
+                                        outbound: envelope.id,
+
+                                        meta: {
+                                            source: 'SMTP',
+                                            queueId: envelope.id,
+                                            from: envelope.from,
+                                            to: envelope.to,
+                                            origin: envelope.origin,
+                                            originhost: envelope.originhost,
+                                            transhost: envelope.transhost,
+                                            transtype: envelope.transtype,
+                                            time: new Date(),
+                                        },
+
+                                        date: false,
+                                        flags: ['\\Seen'],
+                                        raw: messageSource,
+
+                                        // if similar message exists, then skip
+                                        skipExisting: true,
+                                    });
+                                    if (data) {
+                                        app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, data.uid);
+                                    } else {
+                                        app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
                                     }
                                 } catch (err) {
-                                    // ignore
+                                    app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
                                 }
-                            }
-                            try {
-                                let { data } = await addMessage({
-                                    user: userData._id,
-                                    specialUse: '\\Sent',
+                            };
 
-                                    outbound: envelope.id,
-
-                                    meta: {
-                                        source: 'SMTP',
-                                        queueId: envelope.id,
-                                        from: envelope.from,
-                                        to: envelope.to,
-                                        origin: envelope.origin,
-                                        originhost: envelope.originhost,
-                                        transhost: envelope.transhost,
-                                        transtype: envelope.transtype,
-                                        time: new Date(),
-                                    },
-
-                                    date: false,
-                                    flags: ['\\Seen'],
-                                    raw: messageSource,
-
-                                    // if similar message exists, then skip
-                                    skipExisting: true,
+                            let processAudits = async () => {
+                                const messageData = await prepareMessage({
+                                    raw,
                                 });
-                                if (data) {
-                                    app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, data.uid);
+
+                                if (messageData.attachments && messageData.attachments.length) {
+                                    messageData.ha = messageData.attachments.some((a) => !a.related);
                                 } else {
-                                    app.logger.info('Rewrite', '%s MSAUPLSKIP user=%s message=already exists', envelope.id, envelope.user);
+                                    messageData.ha = false;
                                 }
-                            } catch (err) {
-                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message);
-                            }
-                        };
 
-                        let processAudits = async () => {
-                            const messageData = await prepareMessage({
-                                raw,
-                            });
+                                for (let auditData of audits) {
+                                    const auditMessage = await auditHandler.store(auditData._id, raw, {
+                                        date: now,
+                                        msgid: messageData.msgid,
+                                        header: messageData.mimeTree && messageData.mimeTree.parsedHeader,
+                                        ha: messageData.ha,
+                                        info: {
+                                            source: 'SMTP',
+                                            queueId: envelope.id,
+                                            from: envelope.from,
+                                            to: envelope.to,
+                                            origin: envelope.origin,
+                                            originhost: envelope.originhost,
+                                            transhost: envelope.transhost,
+                                            transtype: envelope.transtype,
+                                            time: new Date(),
+                                        },
+                                    });
+                                    app.logger.verbose(
+                                        'Rewrite',
+                                        '%s AUDITUPL user=%s coll=%s message=%s msgid=%s dst=%s',
+                                        envelope.id,
+                                        envelope.user,
+                                        'Stored message to audit base',
+                                        messageData.msgid,
+                                        auditMessage
+                                    );
+                                }
+                            };
 
-                            if (messageData.attachments && messageData.attachments.length) {
-                                messageData.ha = messageData.attachments.some((a) => !a.related);
+                            if (addToSent) {
+                                // addMessage also calls audit methods
+                                storeSentMessage().catch((err) =>
+                                    app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
+                                );
                             } else {
-                                messageData.ha = false;
-                            }
-
-                            for (let auditData of audits) {
-                                const auditMessage = await auditHandler.store(auditData._id, raw, {
-                                    date: now,
-                                    msgid: messageData.msgid,
-                                    header: messageData.mimeTree && messageData.mimeTree.parsedHeader,
-                                    ha: messageData.ha,
-                                    info: {
-                                        source: 'SMTP',
-                                        queueId: envelope.id,
-                                        from: envelope.from,
-                                        to: envelope.to,
-                                        origin: envelope.origin,
-                                        originhost: envelope.originhost,
-                                        transhost: envelope.transhost,
-                                        transtype: envelope.transtype,
-                                        time: new Date(),
-                                    },
-                                });
-                                app.logger.verbose(
-                                    'Rewrite',
-                                    '%s AUDITUPL user=%s coll=%s message=%s msgid=%s dst=%s',
-                                    envelope.id,
-                                    envelope.user,
-                                    'Stored message to audit base',
-                                    messageData.msgid,
-                                    auditMessage
+                                processAudits().catch((err) =>
+                                    app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
                                 );
                             }
-                        };
-
-                        if (addToSent) {
-                            // addMessage also calls audit methods
-                            storeSentMessage().catch((err) =>
-                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
-                            );
-                        } else {
-                            processAudits().catch((err) =>
-                                app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
-                            );
-                        }
+                        });
                     });
-                });
+            });
         });
     });
 
