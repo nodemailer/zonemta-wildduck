@@ -1030,7 +1030,7 @@ module.exports.init = function (app, done) {
                     return callback(err);
                 }
 
-                userData.recipients = Number(userData.recipients) || consts.MAX_RECIPIENTS;
+                userData.recipients = Number(userData.recipients) || app.config.maxRecipients || consts.MAX_RECIPIENTS;
 
                 users.set(envelope, userData);
 

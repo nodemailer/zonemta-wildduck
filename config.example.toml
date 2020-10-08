@@ -12,6 +12,8 @@ hostname="example.com"
 # How long to keep auth records in log
 authlogExpireDays=30
 
+# default smtp recipients for 24h (can be overriden per user)
+maxRecipients=2000
 
 disableUploads=false # if true then messages are not uploaded to Sent Mail folder
 uploadAll=false # if false then messages from Outlook are not uploaded to Sent Mail folder
