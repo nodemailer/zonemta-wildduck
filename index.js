@@ -7,6 +7,7 @@ const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
 const DkimHandler = require('wildduck/lib/dkim-handler');
 const AuditHandler = require('wildduck/lib/audit-handler');
+const consts = require('wildduck/lib/consts');
 const wdErrors = require('wildduck/lib/errors');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
@@ -407,6 +408,7 @@ module.exports.init = function (app, done) {
             }
 
             if (!userData.recipients) {
+                // no limits, nothing to check for
                 return next();
             }
 
@@ -431,6 +433,7 @@ module.exports.init = function (app, done) {
             }
 
             if (!userData.recipients) {
+                // no limits
                 return next();
             }
 
@@ -449,7 +452,7 @@ module.exports.init = function (app, done) {
                 }
             }
 
-            if (!success) {
+            if (!success || sent >= userData.recipients) {
                 loggelf({
                     short_message: '[RCPT TO:' + address.address + '] ' + session.id,
                     _to: address.address,
@@ -1008,28 +1011,30 @@ module.exports.init = function (app, done) {
                     fromWhitelist: true,
                 },
             },
-            (err, user) => {
+            (err, userData) => {
                 if (err) {
                     return callback(err);
                 }
 
-                if (!user) {
+                if (!userData) {
                     let err = new Error('User "' + query.username + '" was not found');
                     err.responseCode = 550;
                     err.name = 'SMTPResponse'; // do not throw
                     return callback(err);
                 }
 
-                if (user.disabled || user.suspended) {
+                if (userData.disabled || userData.suspended) {
                     let err = new Error('User "' + query.username + '" is currently disabled');
                     err.responseCode = 550;
                     err.name = 'SMTPResponse'; // do not throw
                     return callback(err);
                 }
 
-                users.set(envelope, user);
+                userData.recipients = Number(userData.recipients) || consts.MAX_RECIPIENTS;
 
-                return callback(null, user);
+                users.set(envelope, userData);
+
+                return callback(null, userData);
             }
         );
     }
