@@ -435,7 +435,6 @@ module.exports.init = function (app, done) {
             }
 
             let success = session.rcptCounter.success;
-            console.log(session.envelope);
             let sent = session.rcptCounter.value + ((session.envelope.rcptTo && session.envelope.rcptTo.length) || 0);
             let ttl = session.rcptCounter.ttl;
 
@@ -512,7 +511,6 @@ module.exports.init = function (app, done) {
                 return next(err);
             }
 
-            console.log(envelope);
             ttlcounter('wdr:' + userData._id.toString(), envelope.to.length, userData.recipients, false, (/*err, result*/) => {
                 // at his point we only update the counter but do not care about the result as message is already queued for delivery
 
