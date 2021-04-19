@@ -257,17 +257,27 @@ module.exports.init = function (app, done) {
 
             let checkAddress = (address, done) => {
                 if (userData.fromWhitelist && userData.fromWhitelist.length) {
+                    let nAddr = tools.normalizeAddress(address, false, {
+                        removeLabel: true,
+                        removeDots: true,
+                    });
+
                     if (
                         userData.fromWhitelist.some((addr) => {
-                            if (addr === address) {
+                            addr = tools.normalizeAddress(addr, false, {
+                                removeLabel: true,
+                                removeDots: true,
+                            });
+
+                            if (addr === nAddr) {
                                 return true;
                             }
 
-                            if (addr.charAt(0) === '*' && address.indexOf(addr.substr(1)) >= 0) {
+                            if (addr.charAt(0) === '*' && nAddr.indexOf(addr.substr(1)) >= 0) {
                                 return true;
                             }
 
-                            if (addr.charAt(addr.length - 1) === '*' && address.indexOf(addr.substr(0, addr.length - 1)) === 0) {
+                            if (addr.charAt(addr.length - 1) === '*' && nAddr.indexOf(addr.substr(0, addr.length - 1)) === 0) {
                                 return true;
                             }
 
@@ -513,6 +523,9 @@ module.exports.init = function (app, done) {
             if (err) {
                 return next(err);
             }
+
+            // store for later reference
+            envelope.user = userData._id;
 
             ttlcounter('wdr:' + userData._id.toString(), envelope.to.length, userData.recipients, false, (/*err, result*/) => {
                 // at his point we only update the counter but do not care about the result as message is already queued for delivery
