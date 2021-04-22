@@ -524,9 +524,6 @@ module.exports.init = function (app, done) {
                 return next(err);
             }
 
-            // store for later reference
-            envelope.user = userData._id;
-
             ttlcounter('wdr:' + userData._id.toString(), envelope.to.length, userData.recipients, false, (/*err, result*/) => {
                 // at his point we only update the counter but do not care about the result as message is already queued for delivery
 
