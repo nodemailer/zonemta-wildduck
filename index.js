@@ -11,6 +11,7 @@ const consts = require('wildduck/lib/consts');
 const wdErrors = require('wildduck/lib/errors');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
+const CertHandler = require('wildduck/lib/cert-handler');
 const SRS = require('srs.js');
 const Gelf = require('gelf');
 const util = require('util');
@@ -67,8 +68,15 @@ module.exports.init = function (app, done) {
     const dkimHandler = new DkimHandler({
         cipher: app.config.dkim && app.config.dkim.cipher,
         secret: app.config.dkim && app.config.dkim.secret,
-        database: app.db.database,
+        database,
         loggelf: (message) => loggelf(message),
+    });
+
+    const certHandler = new CertHandler({
+        cipher: app.config.certs && app.config.certs.cipher,
+        secret: app.config.certs && app.config.certs.secret,
+        database,
+        redis: redisClient,
     });
 
     const ttlcounter = counters(redisClient).ttlcounter;
@@ -213,6 +221,18 @@ module.exports.init = function (app, done) {
                 next();
             }
         );
+    });
+
+    // use SNI cert if available
+    app.addHook('smtp:sni', (servername, data, next) => {
+        if (!servername) {
+            return next();
+        }
+
+        certHandler
+            .getContextForServername(servername, Object.assign({}, (app.config.certs && app.config.certs.tlsOptions) || {}))
+            .then((ctx) => next(null, ctx))
+            .catch((err) => next(err));
     });
 
     // Check if an user is allowed to use specific address, if not then override using the default

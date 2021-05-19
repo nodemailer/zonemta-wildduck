@@ -54,3 +54,15 @@ uploadAll=false # if false then messages from Outlook are not uploaded to Sent M
         graylogPort=12201
         graylogHostname='127.0.0.1'
         connection='lan'
+
+["modules/zonemta-wildduck".certs]
+    # Configuration for centralised TLS certification handling
+
+    # If set then decrypt encrypted TLS keys using this password
+    #secret="a secret cat"
+
+    # Cipher to use to decrypt encrypted TLS keys
+    #cipher="aes192"
+    ["modules/zonemta-wildduck".certs.tlsOptions]
+        # options from https://nodejs.org/dist/latest-v16.x/docs/api/tls.html#tls_tls_createsecurecontext_options
+        minVersion = "TLSv1"
