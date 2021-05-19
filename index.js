@@ -231,7 +231,10 @@ module.exports.init = function (app, done) {
 
         certHandler
             .getContextForServername(servername, Object.assign({}, (app.config.certs && app.config.certs.tlsOptions) || {}))
-            .then((ctx) => next(null, ctx))
+            .then((ctx) => {
+                data.secureContext = ctx;
+                next(null);
+            })
             .catch((err) => next(err));
     });
 
