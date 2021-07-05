@@ -42,7 +42,7 @@ uploadAll=false # if false then messages from Outlook are not uploaded to Sent M
     # If set then decrypt encrypted DKIM keys using this password
     #secret="a secret cat"
 
-    # Cipher to use to decrypt encrypted DKIM keys
+    # Cipher to use to decrypt encrypted DKIM keys (legacy keys only)
     #cipher="aes192"
 
 
@@ -61,7 +61,7 @@ uploadAll=false # if false then messages from Outlook are not uploaded to Sent M
     # If set then decrypt encrypted TLS keys using this password
     #secret="a secret cat"
 
-    # Cipher to use to decrypt encrypted TLS keys
+    # Cipher to use to decrypt encrypted TLS keys (legacy keys only)
     #cipher="aes192"
     ["modules/zonemta-wildduck".certs.tlsOptions]
         # options from https://nodejs.org/dist/latest-v16.x/docs/api/tls.html#tls_tls_createsecurecontext_options
