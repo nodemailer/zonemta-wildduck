@@ -7,11 +7,11 @@ const MessageHandler = require('wildduck/lib/message-handler');
 const UserHandler = require('wildduck/lib/user-handler');
 const DkimHandler = require('wildduck/lib/dkim-handler');
 const AuditHandler = require('wildduck/lib/audit-handler');
-const consts = require('wildduck/lib/consts');
 const wdErrors = require('wildduck/lib/errors');
 const counters = require('wildduck/lib/counters');
 const tools = require('wildduck/lib/tools');
 const CertHandler = require('wildduck/lib/cert-handler');
+const { SettingsHandler } = require('wildduck/lib/settings-handler');
 const SRS = require('srs.js');
 const Gelf = require('gelf');
 const util = require('util');
@@ -79,6 +79,10 @@ module.exports.init = function (app, done) {
         redis: redisClient,
     });
 
+    const settingsHandler = new SettingsHandler({
+        db: database,
+    });
+
     const ttlcounter = counters(redisClient).ttlcounter;
 
     const srsRewriter = new SRS({
@@ -102,7 +106,6 @@ module.exports.init = function (app, done) {
         redis: redisClient,
         gridfs: gridfsdb,
         users: usersdb,
-        authlogExpireDays: app.config.authlogExpireDays,
         loggelf: (message) => loggelf(message),
     });
 
@@ -1063,11 +1066,16 @@ module.exports.init = function (app, done) {
                     return callback(err);
                 }
 
-                userData.recipients = Number(userData.recipients) || app.config.maxRecipients || consts.MAX_RECIPIENTS;
+                settingsHandler
+                    .get('const:max:recipients')
+                    .then((maxRecipients) => {
+                        userData.recipients = Number(userData.recipients) || app.config.maxRecipients || maxRecipients;
 
-                users.set(envelope, userData);
+                        users.set(envelope, userData);
 
-                return callback(null, userData);
+                        return callback(null, userData);
+                    })
+                    .catch((err) => callback(err));
             }
         );
     }
