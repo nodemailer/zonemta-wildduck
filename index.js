@@ -764,55 +764,75 @@ module.exports.init = function (app, done) {
         let from = (delivery.envelope.from || (delivery.parsedEnvelope && delivery.parsedEnvelope.from) || '').toString();
         let fromDomain = from.substr(from.lastIndexOf('@') + 1);
 
-        let getKey = (domain, done) => {
-            dkimHandler.get({ domain }, true, (err, keyData) => {
-                if (err && err.code !== 'DkimNotFound') {
-                    return done(err);
+        let getKey = async (domain) => {
+            let keyData;
+            try {
+                keyData = await dkimHandler.get({ domain }, true);
+            } catch (err) {
+                if (err.code !== 'DkimNotFound') {
+                    throw err;
                 }
-                if (keyData) {
-                    return done(null, keyData);
-                }
-                dkimHandler.get({ domain: '*' }, true, (err, keyData) => {
-                    if (err) {
-                        return done(err);
-                    }
-                    if (keyData) {
-                        return done(null, keyData);
-                    }
-                    return done();
-                });
-            });
-        };
+            }
+            if (keyData) {
+                return keyData;
+            }
 
-        getKey(fromDomain, (err, keyData) => {
-            if (err && err.code !== 'DkimNotFound') {
-                app.logger.error('DKIM', '%s.%s DBFAIL Failed loading DKIM key "%s". %s', delivery.id, delivery.seq, fromDomain, err.message);
-                return next();
+            try {
+                keyData = await dkimHandler.get({ domain: '*' }, true);
+            } catch (err) {
+                if (err.code !== 'DkimNotFound') {
+                    throw err;
+                }
             }
 
             if (keyData) {
-                delivery.dkim.keys.push({
-                    domainName: tools.normalizeDomain(fromDomain),
-                    keySelector: keyData.selector,
-                    privateKey: keyData.privateKey,
-                });
+                return keyData;
             }
 
-            if (!app.config.signTransportDomain || delivery.dkim.keys.find((key) => key.domainName === delivery.zoneAddress.name)) {
-                return next();
-            }
+            return;
+        };
 
-            getKey(delivery.zoneAddress.name, (err, keyData) => {
-                if (!err && keyData) {
+        getKey(fromDomain)
+            .then((keyData) => {
+                if (keyData) {
                     delivery.dkim.keys.push({
-                        domainName: tools.normalizeDomain(delivery.zoneAddress.name),
+                        domainName: tools.normalizeDomain(fromDomain),
                         keySelector: keyData.selector,
                         privateKey: keyData.privateKey,
                     });
                 }
-                return next();
+
+                if (!app.config.signTransportDomain || delivery.dkim.keys.find((key) => key.domainName === delivery.zoneAddress.name)) {
+                    return next();
+                }
+
+                getKey(delivery.zoneAddress.name)
+                    .then((keyData) => {
+                        if (keyData) {
+                            delivery.dkim.keys.push({
+                                domainName: tools.normalizeDomain(delivery.zoneAddress.name),
+                                keySelector: keyData.selector,
+                                privateKey: keyData.privateKey,
+                            });
+                        }
+                        next();
+                    })
+                    .catc((err) => {
+                        app.logger.error(
+                            'DKIM',
+                            '%s.%s DBFAIL Failed loading DKIM key "%s". %s',
+                            delivery.id,
+                            delivery.seq,
+                            delivery.zoneAddress.name,
+                            err.message
+                        );
+                        next();
+                    });
+            })
+            .catch((err) => {
+                app.logger.error('DKIM', '%s.%s DBFAIL Failed loading DKIM key "%s". %s', delivery.id, delivery.seq, fromDomain, err.message);
+                next();
             });
-        });
     };
 
     // "old" connection handler called when a connection to MX is being
