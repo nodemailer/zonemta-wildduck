@@ -221,8 +221,20 @@ module.exports.init = function (app, done) {
                     return next(err);
                 }
 
+                let username = auth.username;
+                if (auth.username.indexOf('@') >= 0) {
+                    let parts = auth.username.split('@');
+                    if (parts.length === 2 && parts[0] && parts[1] && /[\x80-\xff]/.test(parts[1])) {
+                        try {
+                            username = parts[0] + '@' + punycode.toASCII(parts[1]);
+                        } catch (err) {
+                            // ignore?
+                        }
+                    }
+                }
+
                 loggelf({
-                    short_message: '[AUTH OK:' + auth.username + '] ' + session.id,
+                    short_message: '[AUTH OK:' + username + '] ' + session.id,
 
                     _auth_ok: 'yes',
                     _mail_action: 'auth',
@@ -233,7 +245,7 @@ module.exports.init = function (app, done) {
                     _ip: session.remoteAddress,
                 });
 
-                auth.username = result.username + '[' + auth.username + ']';
+                auth.username = result.username !== username ? result.username + '[' + username + ']' : result.username;
                 next();
             }
         );
