@@ -33,7 +33,7 @@ module.exports.init = function (app, done) {
             ? new Gelf(app.config.gelf.options)
             : {
                   // placeholder
-                  emit: () => false,
+                  emit: (ev, entry) => app.logger.info('GELF', JSON.stringify(entry)),
               };
     wdErrors.setGelf(gelf);
 
