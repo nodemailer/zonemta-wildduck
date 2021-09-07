@@ -38,7 +38,7 @@ module.exports.init = function (app, done) {
     wdErrors.setGelf(gelf);
 
     const loggelf = (message) => {
-        if (!app.config.gelf || !app.config.gelf.enabled) {
+        if (!message) {
             return false;
         }
 
@@ -53,10 +53,10 @@ module.exports.init = function (app, done) {
             message.short_message = component.toUpperCase() + ' ' + (message.short_message || '');
         }
 
-        message.facility = app.config.gelf.component || 'mta'; // facility is deprecated but set by the driver if not provided
+        message.facility = (app.config.gelf && app.config.gelf.component) || 'mta'; // facility is deprecated but set by the driver if not provided
         message.host = hostname;
         message.timestamp = Date.now() / 1000;
-        message._component = app.config.gelf.component || 'mta';
+        message._component = (app.config.gelf && app.config.gelf.component) || 'mta';
         Object.keys(message).forEach((key) => {
             if (!message[key]) {
                 delete message[key];
