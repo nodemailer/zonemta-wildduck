@@ -1006,7 +1006,7 @@ module.exports.init = function (app, done) {
             case 'DROP':
                 message.short_message = `[DROP] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
 
-                for (let key of ['description', 'message-id', 'auth', 'score']) {
+                for (let key of ['description', 'message-id', 'user', 'score', 'tests']) {
                     if (entry[key]) {
                         message[`_${key.replace(/-/g, '_')}`] = entry[key];
                     }
