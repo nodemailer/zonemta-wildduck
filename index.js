@@ -1,6 +1,7 @@
 'use strict';
 
 const os = require('os');
+const punycode = require('punycode/');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const MessageHandler = require('wildduck/lib/message-handler');
@@ -167,7 +168,19 @@ module.exports.init = function (app, done) {
                     return next(err);
                 }
 
-                auth.username = userData.username + '[' + auth.username + ']';
+                let username = auth.username;
+                if (auth.username.indexOf('@') >= 0) {
+                    let parts = auth.username.split('@');
+                    if (parts.length === 2 && parts[0] && parts[1] && /[\x80-\xff]/.test(parts[1])) {
+                        try {
+                            username = parts[0] + '@' + punycode.toASCII(parts[1]);
+                        } catch (err) {
+                            // ignore?
+                        }
+                    }
+                }
+
+                auth.username = userData.username !== username ? userData.username + '[' + username + ']' : userData.username;
                 next();
             });
         }
