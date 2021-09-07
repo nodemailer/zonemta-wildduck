@@ -886,7 +886,7 @@ module.exports.init = function (app, done) {
                     if (match && match[1]) {
                         username = match[1];
                     }
-                    message.short_message = '[QUEUED] ' + entry.id;
+                    message.short_message = `[QUEUED] ${entry.id}`;
                     message._from = (entry.from || '').toString();
                     message._to = (entry.to || '').toString();
                     message._mail_action = 'queued';
@@ -903,7 +903,7 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'ACCEPTED':
-                message.short_message = '[ACCEPTED] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[ACCEPTED] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._mail_action = 'accepted';
@@ -923,7 +923,7 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'DEFERRED':
-                message.short_message = '[DEFERRED] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[DEFERRED] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -948,7 +948,7 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'REJECTED':
-                message.short_message = '[REJECTED] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[REJECTED] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -973,7 +973,7 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'NOQUEUE':
-                message.short_message = '[NOQUEUE] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[NOQUEUE] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -990,7 +990,7 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'DELETED':
-                message.short_message = '[DELETED] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[DELETED] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
@@ -1004,7 +1004,13 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'DROP':
-                message.short_message = '[DROP] ' + entry.id + '.' + entry.seq;
+                message.short_message = `[DROP] ${entry.id}${entry.seq ? `.${entry.seq}` : ''}`;
+
+                for (let key of ['description', 'message-id', 'auth', 'score']) {
+                    if (entry[key]) {
+                        message[`_${key.replace(/-/g, '_')}`] = entry[key];
+                    }
+                }
 
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();

@@ -14,7 +14,7 @@
         "libmime": "5.0.0",
         "nodemailer": "6.6.3",
         "srs.js": "0.1.0",
-        "wildduck": "1.35.3"
+        "wildduck": "1.35.4"
     },
     "devDependencies": {
         "eslint": "7.32.0",
