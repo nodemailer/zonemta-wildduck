@@ -1008,7 +1008,19 @@ module.exports.init = function (app, done) {
 
                 for (let key of ['description', 'message-id', 'user', 'score', 'tests']) {
                     if (entry[key]) {
-                        message[`_${key.replace(/-/g, '_')}`] = entry[key];
+                        let logKey;
+                        switch (key) {
+                            case 'tests':
+                                logKey = 'spam_tests';
+                                break;
+                            case 'score':
+                                logKey = 'spam_score';
+                                break;
+                            default:
+                                logKey = key.replace(/-/g, '_');
+                        }
+
+                        message[`_${logKey}`] = entry[key];
                     }
                 }
 
