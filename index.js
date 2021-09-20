@@ -399,7 +399,7 @@ module.exports.init = function (app, done) {
                         envelope.from + (envelope.from === normalizedAddress ? '' : '[' + normalizedAddress + ']'),
                         userData.address
                     );
-                    envelope.from = userData.address;
+                    envelope.from = messageInfo.rwRcptFrom = userData.address;
                 }
 
                 if (!headerFromObj) {
@@ -444,7 +444,7 @@ module.exports.init = function (app, done) {
                         envelope.from
                     );
 
-                    headerFromObj.address = envelope.from;
+                    headerFromObj.address = messageInfo.rwHeaderFrom = envelope.from;
 
                     let rootNode = new MimeNode();
                     let newHeaderFrom = rootNode._convertAddresses([headerFromObj]);
@@ -871,6 +871,14 @@ module.exports.init = function (app, done) {
             _queue_id: (entry.id || '').toString(),
             _queue_id_seq: (entry.seq || '').toString(),
         };
+
+        if (entry.rwRcptFrom) {
+            message._rewrite_rcpt_from = entry.rwRcptFrom;
+        }
+
+        if (entry.rwHeaderFrom) {
+            message._rewrite_header_from = entry.rwHeaderFrom;
+        }
 
         let headerFrom = entry.headerFrom;
         let headerFromList;
