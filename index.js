@@ -880,6 +880,18 @@ module.exports.init = function (app, done) {
             message._rewrite_header_from = entry.rwHeaderFrom;
         }
 
+        if (entry.protocol) {
+            message._delivery_protocol = entry.protocol;
+        }
+
+        if (entry.httpUrl) {
+            message._http_url = entry.httpUrl;
+        }
+
+        if (entry.httpResponse) {
+            message._http_response = entry.httpResponse;
+        }
+
         let headerFrom = entry.headerFrom;
         let headerFromList;
         let headerFromObj;
