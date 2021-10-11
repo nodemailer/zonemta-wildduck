@@ -258,7 +258,16 @@ module.exports.init = function (app, done) {
         }
 
         certHandler
-            .getContextForServername(servername, Object.assign({}, (app.config.certs && app.config.certs.tlsOptions) || {}))
+            .getContextForServername(
+                servername,
+                Object.assign({}, (app.config.certs && app.config.certs.tlsOptions) || {}),
+                {
+                    source: 'smtp',
+                },
+                {
+                    loggelf: (message) => loggelf(message),
+                }
+            )
             .then((ctx) => {
                 data.secureContext = ctx;
                 next(null);
