@@ -897,7 +897,7 @@ module.exports.init = function (app, done) {
             message._http_url = entry.httpUrl;
         }
 
-        if (entry.httpResponse) {
+        if (entry.httpResponse && Number(entry.httpResponse)) {
             message._http_response = entry.httpResponse;
         }
 
