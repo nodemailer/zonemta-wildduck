@@ -851,7 +851,7 @@ module.exports.init = function (app, done) {
                         }
                         next();
                     })
-                    .catc((err) => {
+                    .catch((err) => {
                         app.logger.error(
                             'DKIM',
                             '%s.%s DBFAIL Failed loading DKIM key "%s". %s',
