@@ -944,7 +944,7 @@ module.exports.init = function (app, done) {
                     message._from = (entry.from || '').toString();
                     message._to = (entry.to || '').toString();
                     message._mail_action = 'queued';
-                    message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
+                    message._message_id = (entry['message-id'] || entry.messageId || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
                     message._ip = entry.src;
                     message._body_size = entry.body;
                     message._spam_score = Number(entry.score) || '';
@@ -961,6 +961,7 @@ module.exports.init = function (app, done) {
                 message._from = (entry.from || '').toString();
                 message._to = (entry.to || '').toString();
                 message._mail_action = 'accepted';
+                message._message_id = (entry['message-id'] || entry.messageId || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
                 message._zone = entry.zone;
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
@@ -985,8 +986,9 @@ module.exports.init = function (app, done) {
                 message._bounce_count = entry.defcount;
 
                 message._mail_action = 'deferred';
-                message._zone = entry.zone;
+                message._message_id = (entry['message-id'] || entry.messageId || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
 
+                message._zone = entry.zone;
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
@@ -1010,8 +1012,9 @@ module.exports.init = function (app, done) {
                 message._bounce_count = entry.defcount;
 
                 message._mail_action = 'bounced';
-                message._zone = entry.zone;
+                message._message_id = (entry['message-id'] || entry.messageId || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
 
+                message._zone = entry.zone;
                 message._mx = entry.mx;
                 message._mx_host = entry.host;
                 message._local_ip = entry.ip;
@@ -1033,7 +1036,7 @@ module.exports.init = function (app, done) {
                 message._to = (entry.to || '').toString();
 
                 message._mail_action = 'dropped';
-                message._message_id = (entry['message-id'] || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
+                message._message_id = (entry['message-id'] || entry.messageId || '').toString().replace(/^[\s<]+|[\s>]+$/g, '');
                 message._ip = entry.src;
                 message._body_size = entry.body;
                 message._spam_score = Number(entry.score) || '';
