@@ -17,6 +17,7 @@ const SRS = require('srs.js');
 const Gelf = require('gelf');
 const util = require('util');
 const libmime = require('libmime');
+const dns = require('dns');
 
 module.exports.title = 'WildDuck MSA';
 module.exports.init = function (app, done) {
@@ -492,7 +493,18 @@ module.exports.init = function (app, done) {
             // ignore
         }
 
-        console.log('RECIPIENT DOMAIN', domain);
+        try {
+            let exchanges = dns.promises.resolveMx(domain);
+            if (!exchanges || !exchanges.length) {
+                return;
+            }
+
+            let mx = exchanges.sort((a, b) => a.priority - b.priority)[0];
+
+            console.log('RECIPIENT DOMAIN', domain, mx);
+        } catch (err) {
+            // ignore?
+        }
     });
 
     // Check if the user can send to yet another recipient
