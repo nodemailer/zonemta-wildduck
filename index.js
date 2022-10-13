@@ -156,11 +156,9 @@ module.exports.init = function (app, done) {
         if (mxCache.has(domain)) {
             let cached = mxCache.get(domain);
             if (cached.error && cached.updated >= Date.now() - 60 * 60 * 1000) {
-                console.log('MX: CACHE HIT ERROR', domain, cached.error, cached.updated);
                 throw cached.error;
             }
             if (cached.value && cached.updated >= Date.now() - 8 * 60 * 60 * 1000) {
-                console.log('MX: CACHE HIT VALUE', domain, cached.value, cached.updated);
                 return cached.value;
             }
         }
@@ -168,11 +166,9 @@ module.exports.init = function (app, done) {
         try {
             let value = await dns.promises.resolveMx(domain);
             mxCache.set(domain, { value, updated: Date.now() });
-            console.log('MX: CACHE MISS VALUE', domain, value, Date.now());
             return value;
         } catch (err) {
             mxCache.set(domain, { error: err, updated: Date.now() });
-            console.log('MX: CACHE MISS ERROR', domain, err, Date.now());
             throw err;
         }
     };
@@ -541,8 +537,6 @@ module.exports.init = function (app, done) {
     });
 
     app.addHook('queue:route', async (envelope, routing) => {
-        console.log('HOOK queue:route', envelope, routing);
-
         let { recipient, deliveryZone } = routing;
 
         if (deliveryZone !== 'default' || !app.config.mxRoutes) {
@@ -581,14 +575,13 @@ module.exports.init = function (app, done) {
                 if (matcher([route], mx)) {
                     // MX routing match found!
                     routing.deliveryZone = app.config.mxRoutes[route];
-                    console.log('FOUND DELIVERY ZONE FOR', domain, mx, route, app.config.mxRoutes[route]);
+                    app.logger.error('Main', '%s MXROUTEMATCH recipient=%s mx=%s zone=%s', envelope.id, recipient, mx, app.config.mxRoutes[route]);
                     return;
                 }
             }
-
-            console.log('NOT FOUND DELIVERY ZONE FOR', domain, mx);
         } catch (err) {
             // ignore?
+            app.logger.error('Main', '%s MXROUTEERR recipient=%s error=%s', envelope.id, recipient, err.message);
         }
     });
 
