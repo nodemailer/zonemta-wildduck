@@ -177,6 +177,33 @@ module.exports.init = function (app, done) {
         }
     };
 
+    const regexCache = new Map();
+
+    const comparePattern = (pattern, input) => {
+        let regex;
+        if (regexCache.has(pattern)) {
+            regex = regexCache.get(pattern);
+        }
+
+        if (!regex) {
+            let escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+            regex = new RegExp(`^${escaped}$`);
+            regexCache.set(pattern, regex);
+        }
+
+        return regex.test(input);
+    };
+
+    const matcher = (patterns, input) => {
+        for (let pattern of patterns) {
+            if (comparePattern(pattern, input)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
+
     const interfaces = [].concat(app.config.interfaces || '*');
     const allInterfaces = interfaces.includes('*');
 
@@ -518,7 +545,7 @@ module.exports.init = function (app, done) {
 
         let { recipient, deliveryZone } = routing;
 
-        if (deliveryZone !== 'default') {
+        if (deliveryZone !== 'default' || !app.config.mxRoutes) {
             return;
         }
 
@@ -544,9 +571,22 @@ module.exports.init = function (app, done) {
                 return;
             }
 
-            let mx = exchanges.sort((a, b) => a.priority - b.priority)[0];
+            let mx = exchanges
+                .sort((a, b) => a.priority - b.priority)[0]
+                .exchange.toLowerCase()
+                .trim();
 
-            console.log('RECIPIENT DOMAIN', domain, mx);
+            let routes = Object.keys(app.config.mxRoutes);
+            for (let route of routes) {
+                if (matcher([route], mx)) {
+                    // MX routing match found!
+                    routing.deliveryZone = app.config.mxRoutes[route];
+                    console.log('FOUND DELIVERY ZONE FOR', domain, mx, route, app.config.mxRoutes[route]);
+                    return;
+                }
+            }
+
+            console.log('NOT FOUND DELIVERY ZONE FOR', domain, mx);
         } catch (err) {
             // ignore?
         }
