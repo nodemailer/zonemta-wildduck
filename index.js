@@ -575,7 +575,7 @@ module.exports.init = function (app, done) {
                 if (matcher([route], mx)) {
                     // MX routing match found!
                     routing.deliveryZone = app.config.mxRoutes[route];
-                    app.logger.error('Main', '%s MXROUTEMATCH recipient=%s mx=%s zone=%s', envelope.id, recipient, mx, app.config.mxRoutes[route]);
+                    app.logger.info('Main', '%s MXROUTEMATCH recipient=%s mx=%s zone=%s', envelope.id, recipient, mx, app.config.mxRoutes[route]);
                     return;
                 }
             }
