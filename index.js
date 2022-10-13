@@ -467,6 +467,10 @@ module.exports.init = function (app, done) {
         });
     });
 
+    app.addHook('message:store', async (envelope, body) => {
+        console.log({ envelope, body });
+    });
+
     // Check if the user can send to yet another recipient
     app.addHook('smtp:mail_from', (address, session, next) => {
         if (!checkInterface(session.interface)) {
