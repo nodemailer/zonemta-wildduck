@@ -1,6 +1,6 @@
 # plugins/wildduck.toml
 ["modules/zonemta-wildduck"]
-enabled=["receiver", "sender"]
+enabled=["receiver", "main", "sender"]
 
 # to which SMTP interfaces this plugin applies to. Use "*" for all interfaces
 interfaces=["feeder"]
