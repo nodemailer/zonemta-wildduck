@@ -470,14 +470,16 @@ module.exports.init = function (app, done) {
     app.addHook('queue:route', async (envelope, routing) => {
         console.log('HOOK queue:route', envelope, routing);
 
+        let { recipient, deliveryZone } = routing;
+
         if (deliveryZone !== 'default') {
             return;
         }
 
         let domain =
-            routing.recipient &&
-            routing.recipient
-                .substring(routing.recipient.indexOf('@') + 1)
+            recipient &&
+            recipient
+                .substring(recipient.indexOf('@') + 1)
                 .toLowerCase()
                 .trim();
         if (!domain) {
