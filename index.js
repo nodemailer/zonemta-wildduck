@@ -132,6 +132,51 @@ module.exports.init = function (app, done) {
         });
     });
 
+    const timedRunner = (promise, time) => {
+        return new Promise((resolve, reject) => {
+            let timer = setTimeout(() => {
+                let error = new Error('Timeout');
+                error.code = 'ETIMEDOUT';
+                reject(error);
+            }, time);
+            promise
+                .then((result) => {
+                    clearTimeout(timer);
+                    resolve(result);
+                })
+                .catch((err) => {
+                    clearTimeout(timer);
+                    reject(err);
+                });
+        });
+    };
+
+    const mxCache = new Map();
+    const resolveMx = async (domain) => {
+        if (mxCache.has(domain)) {
+            let cached = mxCache.get(domain);
+            if (cached.error && cached.updated >= Date.now() - 60 * 60 * 1000) {
+                console.log('MX: CACHE HIT ERROR', domain, cached.error, cached.updated);
+                throw cached.error;
+            }
+            if (cached.value && cached.updated >= Date.now() - 8 * 60 * 60 * 1000) {
+                console.log('MX: CACHE HIT VALUE', domain, cached.value, cached.updated);
+                return cached.value;
+            }
+        }
+
+        try {
+            let value = await dns.promises.resolveMx(domain);
+            mxCache.set(domain, { value, updated: Date.now() });
+            console.log('MX: CACHE MISS VALUE', domain, value, Date.now());
+            return value;
+        } catch (err) {
+            mxCache.set(domain, { error: err, updated: Date.now() });
+            console.log('MX: CACHE MISS ERROR', domain, err, Date.now());
+            throw err;
+        }
+    };
+
     const interfaces = [].concat(app.config.interfaces || '*');
     const allInterfaces = interfaces.includes('*');
 
@@ -494,7 +539,7 @@ module.exports.init = function (app, done) {
         }
 
         try {
-            let exchanges = dns.promises.resolveMx(domain);
+            let exchanges = await timedRunner(resolveMx(domain), 1000);
             if (!exchanges || !exchanges.length) {
                 return;
             }
