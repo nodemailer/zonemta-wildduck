@@ -64,3 +64,6 @@ uploadAll=false # if false then messages from Outlook are not uploaded to Sent M
     ["modules/zonemta-wildduck".certs.tlsOptions]
         # options from https://nodejs.org/dist/latest-v16.x/docs/api/tls.html#tls_tls_createsecurecontext_options
         minVersion = "TLSv1"
+
+#["modules/zonemta-wildduck".mxRoutes]
+#    "*.l.google.com" = "gmail"

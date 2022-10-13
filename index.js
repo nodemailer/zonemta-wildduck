@@ -17,6 +17,7 @@ const SRS = require('srs.js');
 const Gelf = require('gelf');
 const util = require('util');
 const libmime = require('libmime');
+const dns = require('dns');
 
 module.exports.title = 'WildDuck MSA';
 module.exports.init = function (app, done) {
@@ -130,6 +131,74 @@ module.exports.init = function (app, done) {
             return callback(null, { status, data });
         });
     });
+
+    const timedRunner = (promise, time) => {
+        return new Promise((resolve, reject) => {
+            let timer = setTimeout(() => {
+                let error = new Error('Timeout');
+                error.code = 'ETIMEDOUT';
+                reject(error);
+            }, time);
+            promise
+                .then((result) => {
+                    clearTimeout(timer);
+                    resolve(result);
+                })
+                .catch((err) => {
+                    clearTimeout(timer);
+                    reject(err);
+                });
+        });
+    };
+
+    const mxCache = new Map();
+    const resolveMx = async (domain) => {
+        if (mxCache.has(domain)) {
+            let cached = mxCache.get(domain);
+            if (cached.error && cached.updated >= Date.now() - 60 * 60 * 1000) {
+                throw cached.error;
+            }
+            if (cached.value && cached.updated >= Date.now() - 8 * 60 * 60 * 1000) {
+                return cached.value;
+            }
+        }
+
+        try {
+            let value = await dns.promises.resolveMx(domain);
+            mxCache.set(domain, { value, updated: Date.now() });
+            return value;
+        } catch (err) {
+            mxCache.set(domain, { error: err, updated: Date.now() });
+            throw err;
+        }
+    };
+
+    const regexCache = new Map();
+
+    const comparePattern = (pattern, input) => {
+        let regex;
+        if (regexCache.has(pattern)) {
+            regex = regexCache.get(pattern);
+        }
+
+        if (!regex) {
+            let escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+            regex = new RegExp(`^${escaped}$`);
+            regexCache.set(pattern, regex);
+        }
+
+        return regex.test(input);
+    };
+
+    const matcher = (patterns, input) => {
+        for (let pattern of patterns) {
+            if (comparePattern(pattern, input)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
 
     const interfaces = [].concat(app.config.interfaces || '*');
     const allInterfaces = interfaces.includes('*');
@@ -465,6 +534,55 @@ module.exports.init = function (app, done) {
                 });
             });
         });
+    });
+
+    app.addHook('queue:route', async (envelope, routing) => {
+        let { recipient, deliveryZone } = routing;
+
+        if (deliveryZone !== 'default' || !app.config.mxRoutes) {
+            return;
+        }
+
+        let domain =
+            recipient &&
+            recipient
+                .substring(recipient.indexOf('@') + 1)
+                .toLowerCase()
+                .trim();
+        if (!domain) {
+            return;
+        }
+
+        try {
+            domain = punycode.toASCII(domain);
+        } catch (err) {
+            // ignore
+        }
+
+        try {
+            let exchanges = await timedRunner(resolveMx(domain), 1000);
+            if (!exchanges || !exchanges.length) {
+                return;
+            }
+
+            let mx = exchanges
+                .sort((a, b) => a.priority - b.priority)[0]
+                .exchange.toLowerCase()
+                .trim();
+
+            let routes = Object.keys(app.config.mxRoutes);
+            for (let route of routes) {
+                if (matcher([route], mx)) {
+                    // MX routing match found!
+                    routing.deliveryZone = app.config.mxRoutes[route];
+                    app.logger.info('Main', '%s MXROUTEMATCH recipient=%s mx=%s zone=%s', envelope.id, recipient, mx, app.config.mxRoutes[route]);
+                    return;
+                }
+            }
+        } catch (err) {
+            // ignore?
+            app.logger.error('Main', '%s MXROUTEERR recipient=%s error=%s', envelope.id, recipient, err.message);
+        }
     });
 
     // Check if the user can send to yet another recipient
