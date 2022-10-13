@@ -467,8 +467,8 @@ module.exports.init = function (app, done) {
         });
     });
 
-    app.addHook('message:queue', async (envelope, messageInfo) => {
-        console.log('HOOK message:queue', envelope, messageInfo);
+    app.addHook('queue:route', async (envelope, routing) => {
+        console.log('HOOK queue:route', envelope, routing);
     });
 
     // Check if the user can send to yet another recipient
