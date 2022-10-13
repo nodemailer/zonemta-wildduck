@@ -469,6 +469,28 @@ module.exports.init = function (app, done) {
 
     app.addHook('queue:route', async (envelope, routing) => {
         console.log('HOOK queue:route', envelope, routing);
+
+        if (deliveryZone !== 'default') {
+            return;
+        }
+
+        let domain =
+            routing.recipient &&
+            routing.recipient
+                .substring(routing.recipient.indexOf('@') + 1)
+                .toLowerCase()
+                .trim();
+        if (!domain) {
+            return;
+        }
+
+        try {
+            domain = punycode.toASCII(domain);
+        } catch (err) {
+            // ignore
+        }
+
+        console.log('RECIPIENT DOMAIN', domain);
     });
 
     // Check if the user can send to yet another recipient
