@@ -1161,6 +1161,10 @@ module.exports.init = function (app, done) {
                 message._interface = entry.interface;
                 message._proto = entry.transtype;
 
+                if (entry.user) {
+                    message._user = entry.user;
+                }
+
                 message._response = entry.responseText;
                 break;
 
