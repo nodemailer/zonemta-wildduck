@@ -203,6 +203,13 @@ module.exports.init = function (app, done) {
     const interfaces = [].concat(app.config.interfaces || '*');
     const allInterfaces = interfaces.includes('*');
 
+    app.addHook('smtp:init', async (server) => {
+        let maxRcptTo = await settingsHandler.get('const:max:rcpt_to');
+        if (maxRcptTo) {
+            server.options.maxRecipients = maxRcptTo;
+        }
+    });
+
     // handle user authentication
     app.addHook('smtp:auth', (auth, session, next) => {
         if (!checkInterface(session.interface)) {

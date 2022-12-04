@@ -15,10 +15,10 @@
         "nodemailer": "6.8.0",
         "punycode": "2.1.1",
         "srs.js": "0.1.0",
-        "wildduck": "1.37.5"
+        "wildduck": "1.38.0"
     },
     "devDependencies": {
-        "eslint": "8.25.0",
+        "eslint": "8.29.0",
         "eslint-config-nodemailer": "1.2.0",
         "eslint-config-prettier": "8.5.0",
         "grunt": "1.5.3",
