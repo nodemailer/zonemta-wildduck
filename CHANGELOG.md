@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.4](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.3...v1.32.4) (2023-09-05)
+
+
+### Bug Fixes
+
+* **release:** Added missing repo url to package.json ([57fb9dc](https://github.com/nodemailer/zonemta-wildduck/commit/57fb9dcbbb14bf81627eb2c3acc11e83cfe6e55a))
+
 ## [1.32.3](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.2...v1.32.3) (2023-09-05)
 
 
