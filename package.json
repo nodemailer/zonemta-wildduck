@@ -5,6 +5,10 @@
     "main": "index.js",
     "author": "Andris Reinman",
     "license": "EUPL-1.1+",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/nodemailer/zonemta-wildduck.git"
+    },
     "scripts": {
         "test": "grunt"
     },
