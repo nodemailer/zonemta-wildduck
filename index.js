@@ -132,8 +132,8 @@ module.exports.init = function (app, done) {
         });
     });
 
-    const timedRunner = (promise, time) => {
-        return new Promise((resolve, reject) => {
+    const timedRunner = (promise, time) =>
+        new Promise((resolve, reject) => {
             let timer = setTimeout(() => {
                 let error = new Error('Timeout');
                 error.code = 'ETIMEDOUT';
@@ -149,7 +149,6 @@ module.exports.init = function (app, done) {
                     reject(err);
                 });
         });
-    };
 
     const mxCache = new Map();
     const resolveMx = async (domain) => {
