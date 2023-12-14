@@ -1225,6 +1225,50 @@ module.exports.init = function (app, done) {
         return next();
     });
 
+    app.addHook('sender:responseError', async (delivery) => {
+        let deferTimesStr = await settingsHandler.get('const:sender:defer_times');
+        if (deferTimesStr) {
+            const deferTimes = deferTimesStr
+                .split(',')
+                .map((v) => {
+                    let m = v.match(/\s*(\d+)\s*([^\d\s]+)?\s*/);
+                    if (!m) {
+                        return false;
+                    }
+                    const n = Number(m[1]);
+                    const l = (m[2] || '').toLowerCase();
+
+                    switch (l) {
+                        case 's':
+                        case 'sec':
+                        case 'second':
+                        case 'seconds':
+                            return n * 1000;
+
+                        case 'm':
+                        case 'min':
+                            return n * 60 * 1000;
+
+                        case 'h':
+                        case 'hour':
+                            return n * 60 * 60 * 1000;
+
+                        case 'd':
+                        case 'day':
+                        case 'days':
+                            return n * 24 * 60 * 60 * 1000;
+
+                        default:
+                            return n;
+                    }
+                })
+                .filter((v) => v);
+            if (deferTimes && deferTimes.length) {
+                delivery.deferTimes = deferTimes;
+            }
+        }
+    });
+
     function checkInterface(iface) {
         if (allInterfaces || interfaces.includes(iface)) {
             return true;
