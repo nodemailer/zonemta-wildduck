@@ -10,7 +10,8 @@
         "url": "git+https://github.com/nodemailer/zonemta-wildduck.git"
     },
     "scripts": {
-        "test": "grunt"
+        "test": "grunt",
+        "update": "rm -rf node_modules package-lock.json && ncu -u && npm install"
     },
     "dependencies": {
         "bcryptjs": "2.4.3",
