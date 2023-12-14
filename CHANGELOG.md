@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.6](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.5...v1.32.6) (2023-12-14)
+
+
+### Bug Fixes
+
+* **defer:** Apply const:sender:defer_times for failed delivery attempts ([7d24a84](https://github.com/nodemailer/zonemta-wildduck/commit/7d24a84869309920b71a0df7a0ab34f684c3b75c))
+
 ## [1.32.5](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.4...v1.32.5) (2023-10-17)
 
 
