@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.8](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.7...v1.32.8) (2024-02-08)
+
+
+### Bug Fixes
+
+* **deps:** bumped wildduck version ([463d74a](https://github.com/nodemailer/zonemta-wildduck/commit/463d74ad6edc25d06d9d1a58d2108dc44e8f6f10))
+
 ## [1.32.7](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.6...v1.32.7) (2024-02-05)
 
 
