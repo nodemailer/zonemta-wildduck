@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.9](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.8...v1.32.9) (2024-02-08)
+
+
+### Bug Fixes
+
+* **logs:** log queue polling ([5c92731](https://github.com/nodemailer/zonemta-wildduck/commit/5c9273164189ea66c0bd67add7eccdf439883258))
+
 ## [1.32.8](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.7...v1.32.8) (2024-02-08)
 
 
