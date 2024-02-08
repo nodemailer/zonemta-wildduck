@@ -1216,6 +1216,21 @@ module.exports.init = function (app, done) {
 
                 message._response = entry.reason;
                 break;
+
+            case 'QUEUE_POLL':
+                {
+                    message.short_message = `[QUEUE_POLL] ${entry.query?.sendingZone}`;
+                    message._mail_action = 'queue_poll';
+
+                    message._queue_poll_zone = (entry.query?.sendingZone || '').toString();
+                    message._queue_poll_lte = entry.query?.queued?.$lte?.toISOString();
+                    message._queue_poll_instance = entry.query?.$or?.at(-1)?.assigned;
+
+                    message._queue_poll_skip_domains = entry.query?.domain?.$nin?.join(', ');
+
+                    message._error = entry.error;
+                }
+                break;
         }
 
         if (message.short_message) {
