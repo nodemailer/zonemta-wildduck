@@ -1228,6 +1228,8 @@ module.exports.init = function (app, done) {
 
                     message._queue_poll_skip_domains = entry.query?.domain?.$nin?.join(', ');
 
+                    message._queue_poll_match = entry.match ? 'yes' : 'no';
+
                     message._error = entry.error;
                 }
                 break;
