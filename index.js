@@ -1218,20 +1218,23 @@ module.exports.init = function (app, done) {
                 break;
 
             case 'QUEUE_POLL':
-                {
-                    message.short_message = `[QUEUE_POLL] ${entry.query?.sendingZone}`;
-                    message._mail_action = 'queue_poll';
+                message.short_message = `[QUEUE_POLL] ${entry.query?.sendingZone}`;
+                message._mail_action = 'queue_poll';
+                message._queue_poll_zone = (entry.query?.sendingZone || '').toString();
+                message._queue_poll_lte = entry.query?.queued?.$lte?.toISOString();
+                message._queue_poll_instance = entry.query?.$or?.at(-1)?.assigned;
+                message._queue_poll_skip_domains = entry.query?.domain?.$nin?.join(', ');
+                message._queue_poll_match = entry.match ? 'yes' : 'no';
+                message._error = entry.error;
+                break;
 
-                    message._queue_poll_zone = (entry.query?.sendingZone || '').toString();
-                    message._queue_poll_lte = entry.query?.queued?.$lte?.toISOString();
-                    message._queue_poll_instance = entry.query?.$or?.at(-1)?.assigned;
-
-                    message._queue_poll_skip_domains = entry.query?.domain?.$nin?.join(', ');
-
-                    message._queue_poll_match = entry.match ? 'yes' : 'no';
-
-                    message._error = entry.error;
-                }
+            case 'QUEUE_BOUNCE':
+                message.short_message = `[QUEUE_BOUNCE] ${entry.bounceType}`;
+                message._mail_action = 'queue_bounce';
+                message._queue_bounce_queued = (entry.queued || '').toString();
+                message._queue_bounce_type = entry.bounceType;
+                message._queue_bounce_id = entry.bounceId;
+                message._error = entry.error;
                 break;
         }
 
