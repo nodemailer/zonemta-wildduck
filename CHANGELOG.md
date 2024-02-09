@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.11](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.10...v1.32.11) (2024-02-09)
+
+
+### Bug Fixes
+
+* **logs:** log bounce events to graylog ([b3b8773](https://github.com/nodemailer/zonemta-wildduck/commit/b3b8773584eb58482c00b9355ae4664a53bb583e))
+
 ## [1.32.10](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.9...v1.32.10) (2024-02-08)
 
 
