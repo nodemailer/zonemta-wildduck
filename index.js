@@ -1,7 +1,7 @@
 'use strict';
 
 const os = require('os');
-const punycode = require('punycode/');
+const punycode = require('punycode.js');
 const addressparser = require('nodemailer/lib/addressparser');
 const MimeNode = require('nodemailer/lib/mime-node');
 const MessageHandler = require('wildduck/lib/message-handler');
