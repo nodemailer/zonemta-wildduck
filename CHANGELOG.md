@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.13](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.12...v1.32.13) (2024-04-22)
+
+
+### Bug Fixes
+
+* **deps:** Bumped deps ([c613418](https://github.com/nodemailer/zonemta-wildduck/commit/c61341828f36ffac324e2626896dca7cc81b42dd))
+
 ## [1.32.12](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.11...v1.32.12) (2024-04-01)
 
 
