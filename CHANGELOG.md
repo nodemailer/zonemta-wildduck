@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.14](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.13...v1.32.14) (2024-04-29)
+
+
+### Bug Fixes
+
+* **SNI:** Autogenerate SNI certificate if needed ([1b18377](https://github.com/nodemailer/zonemta-wildduck/commit/1b183773fb7b1785ce5edbe3cb064e3b01d60679))
+
 ## [1.32.13](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.12...v1.32.13) (2024-04-22)
 
 
