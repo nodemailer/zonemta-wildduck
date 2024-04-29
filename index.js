@@ -35,18 +35,18 @@ module.exports.init = function (app, done) {
             ? new Gelf(app.config.gelf.options)
             : {
                   // placeholder
-                  emit: (ev, entry) => app.logger.info('GELF', JSON.stringify(entry)),
+                  emit: (ev, entry) => app.logger.info('GELF', JSON.stringify(entry))
               };
     wdErrors.setGelf(gelf);
 
-    const loggelf = (message) => {
+    const loggelf = message => {
         if (!message) {
             return false;
         }
 
         if (typeof message === 'string') {
             message = {
-                short_message: message,
+                short_message: message
             };
         }
         message = message || {};
@@ -59,7 +59,7 @@ module.exports.init = function (app, done) {
         message.host = hostname;
         message.timestamp = Date.now() / 1000;
         message._component = (app.config.gelf && app.config.gelf.component) || 'mta';
-        Object.keys(message).forEach((key) => {
+        Object.keys(message).forEach(key => {
             if (!message[key]) {
                 delete message[key];
             }
@@ -71,7 +71,7 @@ module.exports.init = function (app, done) {
         cipher: app.config.dkim && app.config.dkim.cipher,
         secret: app.config.dkim && app.config.dkim.secret,
         database,
-        loggelf: (message) => loggelf(message),
+        loggelf: message => loggelf(message)
     });
 
     const certHandler = new CertHandler({
@@ -79,16 +79,19 @@ module.exports.init = function (app, done) {
         secret: app.config.certs && app.config.certs.secret,
         database,
         redis: redisClient,
+        users: usersdb,
+        acmeConfig: app.config.acme,
+        loggelf: message => loggelf(message)
     });
 
     const settingsHandler = new SettingsHandler({
-        db: database,
+        db: database
     });
 
     const ttlcounter = counters(redisClient).ttlcounter;
 
     const srsRewriter = new SRS({
-        secret: (app.config.srs && app.config.srs.secret) || '?',
+        secret: (app.config.srs && app.config.srs.secret) || '?'
     });
 
     const messageHandler = new MessageHandler({
@@ -98,9 +101,9 @@ module.exports.init = function (app, done) {
         gridfs: gridfsdb,
         attachments: app.config.attachments || {
             type: 'gridstore',
-            bucket: 'attachments',
+            bucket: 'attachments'
         },
-        loggelf: (message) => loggelf(message),
+        loggelf: message => loggelf(message)
     });
 
     const userHandler = new UserHandler({
@@ -108,7 +111,7 @@ module.exports.init = function (app, done) {
         redis: redisClient,
         gridfs: gridfsdb,
         users: usersdb,
-        loggelf: (message) => loggelf(message),
+        loggelf: message => loggelf(message)
     });
 
     const auditHandler = new AuditHandler({
@@ -116,7 +119,7 @@ module.exports.init = function (app, done) {
         gridfs: gridfsdb,
         users: usersdb,
         bucket: 'audit',
-        loggelf: (message) => loggelf(message),
+        loggelf: message => loggelf(message)
     });
 
     const encryptMessage = util.promisify(messageHandler.encryptMessage.bind(messageHandler));
@@ -140,18 +143,18 @@ module.exports.init = function (app, done) {
                 reject(error);
             }, time);
             promise
-                .then((result) => {
+                .then(result => {
                     clearTimeout(timer);
                     resolve(result);
                 })
-                .catch((err) => {
+                .catch(err => {
                     clearTimeout(timer);
                     reject(err);
                 });
         });
 
     const mxCache = new Map();
-    const resolveMx = async (domain) => {
+    const resolveMx = async domain => {
         if (mxCache.has(domain)) {
             let cached = mxCache.get(domain);
             if (cached.error && cached.updated >= Date.now() - 60 * 60 * 1000) {
@@ -202,7 +205,7 @@ module.exports.init = function (app, done) {
     const interfaces = [].concat(app.config.interfaces || '*');
     const allInterfaces = interfaces.includes('*');
 
-    app.addHook('smtp:init', async (server) => {
+    app.addHook('smtp:init', async server => {
         let maxRcptTo = await settingsHandler.get('const:max:rcpt_to');
         if (maxRcptTo) {
             server.options.maxRecipients = maxRcptTo;
@@ -237,7 +240,7 @@ module.exports.init = function (app, done) {
                         _xclient: 'yes',
 
                         _session_id: session.id,
-                        _ip: session.remoteAddress,
+                        _ip: session.remoteAddress
                     });
 
                     return next(err);
@@ -266,7 +269,7 @@ module.exports.init = function (app, done) {
             'smtp',
             {
                 protocol: 'SMTP',
-                ip: session.remoteAddress,
+                ip: session.remoteAddress
             },
             (err, result) => {
                 if (err) {
@@ -290,7 +293,7 @@ module.exports.init = function (app, done) {
                         _require_asp: result ? 'yes' : '',
 
                         _session_id: session.id,
-                        _ip: session.remoteAddress,
+                        _ip: session.remoteAddress
                     });
 
                     return next(err);
@@ -317,7 +320,7 @@ module.exports.init = function (app, done) {
                     _scope: result.scope,
 
                     _session_id: session.id,
-                    _ip: session.remoteAddress,
+                    _ip: session.remoteAddress
                 });
 
                 auth.username = result.username !== username ? result.username + '[' + username + ']' : result.username;
@@ -337,17 +340,17 @@ module.exports.init = function (app, done) {
                 servername,
                 Object.assign({}, (app.config.certs && app.config.certs.tlsOptions) || {}),
                 {
-                    source: 'smtp',
+                    source: 'smtp'
                 },
                 {
-                    loggelf: (message) => loggelf(message),
+                    loggelf: message => loggelf(message)
                 }
             )
-            .then((ctx) => {
+            .then(ctx => {
                 data.secureContext = ctx;
                 next(null);
             })
-            .catch((err) => next(err));
+            .catch(err => next(err));
     });
 
     // Check if an user is allowed to use specific address, if not then override using the default
@@ -394,14 +397,14 @@ module.exports.init = function (app, done) {
                 if (userData.fromWhitelist && userData.fromWhitelist.length) {
                     let nAddr = tools.normalizeAddress(address, false, {
                         removeLabel: true,
-                        removeDots: true,
+                        removeDots: true
                     });
 
                     if (
-                        userData.fromWhitelist.some((addr) => {
+                        userData.fromWhitelist.some(addr => {
                             addr = tools.normalizeAddress(addr, false, {
                                 removeLabel: true,
-                                removeDots: true,
+                                removeDots: true
                             });
 
                             if (addr === nAddr) {
@@ -427,7 +430,7 @@ module.exports.init = function (app, done) {
 
                         return done(null, {
                             address,
-                            addrview: normalizedAddress,
+                            addrview: normalizedAddress
                         });
                     }
                 }
@@ -450,7 +453,7 @@ module.exports.init = function (app, done) {
                     }
 
                     if (addressData.targets) {
-                        if (addressData.targets.find((target) => target.user && target.user.toString() === userData._id.toString())) {
+                        if (addressData.targets.find(target => target.user && target.user.toString() === userData._id.toString())) {
                             return done(null, addressData);
                         } else {
                             return done(null, false);
@@ -471,7 +474,7 @@ module.exports.init = function (app, done) {
                         _mail_action: 'rw_envelope_from',
                         _queue_id: envelope.id,
                         _envelope_from: envelope.from,
-                        _rewrite_from: userData.address,
+                        _rewrite_from: userData.address
                     });
 
                     // replace MAIL FROM address
@@ -516,7 +519,7 @@ module.exports.init = function (app, done) {
                         _header_from: tools.normalizeAddress(headerFromObj.address),
                         _header_from_value: headerFrom,
                         _header_from_name: headerFromName,
-                        _rewrite_from: envelope.from,
+                        _rewrite_from: envelope.from
                     });
 
                     app.logger.info(
@@ -661,7 +664,7 @@ module.exports.init = function (app, done) {
                     _queue_id: session.envelopeId,
                     _limit_sent: sent,
                     _limit_allowed: userData.recipients,
-                    _sess: session.id,
+                    _sess: session.id
                 });
 
                 app.logger.info(
@@ -689,7 +692,7 @@ module.exports.init = function (app, done) {
                 _queue_id: session.envelopeId,
                 _limit_sent: sent,
                 _limit_allowed: userData.recipients,
-                _sess: session.id,
+                _sess: session.id
             });
 
             app.logger.info('Sender', '%s RCPTACCEPT accepted %s sent=%s allowed=%s', session.envelopeId, address.address, sent, userData.recipients);
@@ -721,7 +724,7 @@ module.exports.init = function (app, done) {
                         }
 
                         let now = new Date();
-                        audits = audits.filter((auditData) => {
+                        audits = audits.filter(auditData => {
                             if (auditData.start && auditData.start > now) {
                                 return false;
                             }
@@ -749,7 +752,7 @@ module.exports.init = function (app, done) {
 
                         let chunks = [
                             Buffer.from('Return-Path: ' + envelope.from + '\r\n' + generateReceivedHeader(envelope, hostname) + '\r\n'),
-                            envelope.headers.build(),
+                            envelope.headers.build()
                         ];
                         let chunklen = chunks[0].length + chunks[1].length;
 
@@ -761,7 +764,7 @@ module.exports.init = function (app, done) {
                                 chunklen += chunk.length;
                             }
                         });
-                        body.once('error', (err) => next(err));
+                        body.once('error', err => next(err));
                         body.once('end', () => {
                             // Next we try to upload the message to Sent Mail folder
                             // It doesn't really matter if it succeeds or not so we are not waiting until it's done
@@ -801,7 +804,7 @@ module.exports.init = function (app, done) {
                                             originhost: envelope.originhost,
                                             transhost: envelope.transhost,
                                             transtype: envelope.transtype,
-                                            time: new Date(),
+                                            time: new Date()
                                         },
 
                                         date: false,
@@ -809,7 +812,7 @@ module.exports.init = function (app, done) {
                                         raw: messageSource,
 
                                         // if similar message exists, then skip
-                                        skipExisting: true,
+                                        skipExisting: true
                                     });
                                     if (data) {
                                         app.logger.info('Rewrite', '%s MSAUPLSUCC user=%s uid=%s', envelope.id, envelope.user, data.uid);
@@ -823,11 +826,11 @@ module.exports.init = function (app, done) {
 
                             let processAudits = async () => {
                                 const messageData = await prepareMessage({
-                                    raw,
+                                    raw
                                 });
 
                                 if (messageData.attachments && messageData.attachments.length) {
-                                    messageData.ha = messageData.attachments.some((a) => !a.related);
+                                    messageData.ha = messageData.attachments.some(a => !a.related);
                                 } else {
                                     messageData.ha = false;
                                 }
@@ -847,8 +850,8 @@ module.exports.init = function (app, done) {
                                             originhost: envelope.originhost,
                                             transhost: envelope.transhost,
                                             transtype: envelope.transtype,
-                                            time: new Date(),
-                                        },
+                                            time: new Date()
+                                        }
                                     });
                                     app.logger.verbose(
                                         'Rewrite',
@@ -864,11 +867,11 @@ module.exports.init = function (app, done) {
 
                             if (addToSent) {
                                 // addMessage also calls audit methods
-                                storeSentMessage().catch((err) =>
+                                storeSentMessage().catch(err =>
                                     app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
                                 );
                             } else {
-                                processAudits().catch((err) =>
+                                processAudits().catch(err =>
                                     app.logger.error('Rewrite', '%s MSAUPLFAIL user=%s error=%s', envelope.id, envelope.user, err.message)
                                 );
                             }
@@ -922,7 +925,7 @@ module.exports.init = function (app, done) {
         let from = (delivery.envelope.from || (delivery.parsedEnvelope && delivery.parsedEnvelope.from) || '').toString();
         let fromDomain = from.substr(from.lastIndexOf('@') + 1);
 
-        let getKey = async (domain) => {
+        let getKey = async domain => {
             let keyData;
             try {
                 keyData = await dkimHandler.get({ domain }, true);
@@ -951,31 +954,31 @@ module.exports.init = function (app, done) {
         };
 
         getKey(fromDomain)
-            .then((keyData) => {
+            .then(keyData => {
                 if (keyData) {
                     delivery.dkim.keys.push({
                         domainName: tools.normalizeDomain(fromDomain),
                         keySelector: keyData.selector,
-                        privateKey: keyData.privateKey,
+                        privateKey: keyData.privateKey
                     });
                 }
 
-                if (!app.config.signTransportDomain || delivery.dkim.keys.find((key) => key.domainName === delivery.zoneAddress.name)) {
+                if (!app.config.signTransportDomain || delivery.dkim.keys.find(key => key.domainName === delivery.zoneAddress.name)) {
                     return next();
                 }
 
                 getKey(delivery.zoneAddress.name)
-                    .then((keyData) => {
+                    .then(keyData => {
                         if (keyData) {
                             delivery.dkim.keys.push({
                                 domainName: tools.normalizeDomain(delivery.zoneAddress.name),
                                 keySelector: keyData.selector,
-                                privateKey: keyData.privateKey,
+                                privateKey: keyData.privateKey
                             });
                         }
                         next();
                     })
-                    .catch((err) => {
+                    .catch(err => {
                         app.logger.error(
                             'DKIM',
                             '%s.%s DBFAIL Failed loading DKIM key "%s". %s',
@@ -987,7 +990,7 @@ module.exports.init = function (app, done) {
                         next();
                     });
             })
-            .catch((err) => {
+            .catch(err => {
                 app.logger.error('DKIM', '%s.%s DBFAIL Failed loading DKIM key "%s". %s', delivery.id, delivery.seq, fromDomain, err.message);
                 next();
             });
@@ -1002,7 +1005,7 @@ module.exports.init = function (app, done) {
 
         let message = {
             _queue_id: (entry.id || '').toString(),
-            _queue_id_seq: (entry.seq || '').toString(),
+            _queue_id_seq: (entry.seq || '').toString()
         };
 
         if (entry.rwRcptFrom) {
@@ -1053,7 +1056,7 @@ module.exports.init = function (app, done) {
         let updateAudited = (status, info) => {
             auditHandler
                 .updateDeliveryStatus(entry.id, entry.seq, status, info)
-                .catch((err) => app.logger.error('Rewrite', '%s.%s LOGERR %s', entry.id, entry.seq, err.message));
+                .catch(err => app.logger.error('Rewrite', '%s.%s LOGERR %s', entry.id, entry.seq, err.message));
         };
 
         switch (entry.action) {
@@ -1097,7 +1100,7 @@ module.exports.init = function (app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip,
+                    local_ip: entry.ip
                 });
                 break;
 
@@ -1123,7 +1126,7 @@ module.exports.init = function (app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip,
+                    local_ip: entry.ip
                 });
                 break;
 
@@ -1149,7 +1152,7 @@ module.exports.init = function (app, done) {
                     to: (entry.to || '').toString(),
                     response: entry.response,
                     mx: entry.mx,
-                    local_ip: entry.ip,
+                    local_ip: entry.ip
                 });
                 break;
 
@@ -1245,12 +1248,12 @@ module.exports.init = function (app, done) {
         return next();
     });
 
-    app.addHook('sender:responseError', async (delivery) => {
+    app.addHook('sender:responseError', async delivery => {
         let deferTimesStr = await settingsHandler.get('const:sender:defer_times');
         if (deferTimesStr) {
             const deferTimes = deferTimesStr
                 .split(',')
-                .map((v) => {
+                .map(v => {
                     let m = v.match(/\s*(\d+)\s*([^\d\s]+)?\s*/);
                     if (!m) {
                         return false;
@@ -1282,7 +1285,7 @@ module.exports.init = function (app, done) {
                             return n;
                     }
                 })
-                .filter((v) => v);
+                .filter(v => v);
             if (deferTimes && deferTimes.length) {
                 delivery.deferTimes = deferTimes;
             }
@@ -1306,7 +1309,7 @@ module.exports.init = function (app, done) {
 
         if (envelope.user) {
             query = {
-                username: envelope.user.split('[').shift(),
+                username: envelope.user.split('[').shift()
             };
         }
 
@@ -1331,8 +1334,8 @@ module.exports.init = function (app, done) {
                     uploadSentMessages: true,
                     disabled: true,
                     suspended: true,
-                    fromWhitelist: true,
-                },
+                    fromWhitelist: true
+                }
             },
             (err, userData) => {
                 if (err) {
@@ -1355,14 +1358,14 @@ module.exports.init = function (app, done) {
 
                 settingsHandler
                     .get('const:max:recipients')
-                    .then((maxRecipients) => {
+                    .then(maxRecipients => {
                         userData.recipients = Number(userData.recipients) || app.config.maxRecipients || maxRecipients;
 
                         users.set(envelope, userData);
 
                         return callback(null, userData);
                     })
-                    .catch((err) => callback(err));
+                    .catch(err => callback(err));
             }
         );
     }
