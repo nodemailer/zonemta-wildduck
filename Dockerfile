@@ -21,5 +21,5 @@ RUN apk add --no-cache tini
 WORKDIR /app
 COPY --from=builder /app /app
 
-ENTRYPOINT ["/sbin/tini", "--", "node", "index.js"]
-CMD ["--config=config/zonemta.toml"]
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "index.js", "--config=config/zonemta.toml"]
