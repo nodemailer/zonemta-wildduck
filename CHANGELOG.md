@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.17](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.16...v1.32.17) (2024-09-16)
+
+
+### Bug Fixes
+
+* **cicd-pipeline:** Add pipeline for building and pushing the docker image to GHCR ([1f4eeb4](https://github.com/nodemailer/zonemta-wildduck/commit/1f4eeb438249fbdaaed8cf17e87fe5ab3f777f56))
+
 ## [1.32.16](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.15...v1.32.16) (2024-08-08)
 
 
