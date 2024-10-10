@@ -1082,7 +1082,7 @@ module.exports.init = function (app, done) {
                     message._proto = entry.transtype;
                     message._subject =
                         Buffer.byteLength(entry.subject, 'utf8') > maxSubjectLineLogLengthBytes
-                            ? entry.subject.substring(0, maxSubjectLineLogLengthBytes / 4)
+                            ? entry.subject.substring(0, maxSubjectLineLogLengthBytes / 4) // divide by 4 to account for max utf-8 char size
                             : entry.subject;
 
                     message._authenticated_sender = username;
