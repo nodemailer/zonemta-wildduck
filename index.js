@@ -29,6 +29,9 @@ module.exports.init = function (app, done) {
     const gridfsdb = app.db.gridfs;
 
     const component = ((app.config.gelf && app.config.gelf.component) || 'mta').toUpperCase();
+
+    const maxSubjectLineLogLengthBytes = app.config.gelf.subjectLength || 32766 - 1; // 32766 is max gelf default, do -1 for good measure
+
     const hostname = app.config.hostname || os.hostname();
     const gelf =
         app.config.gelf && app.config.gelf.enabled
@@ -1077,7 +1080,10 @@ module.exports.init = function (app, done) {
                     message._spam_score = Number(entry.score) || '';
                     message._interface = entry.interface;
                     message._proto = entry.transtype;
-                    message._subject = entry.subject;
+                    message._subject =
+                        Buffer.byteLength(entry.subject, 'utf8') > maxSubjectLineLogLengthBytes
+                            ? entry.subject.substring(0, maxSubjectLineLogLengthBytes / 4) // divide by 4 to account for max utf-8 char size
+                            : entry.subject;
 
                     message._authenticated_sender = username;
                 }
