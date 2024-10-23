@@ -36,3 +36,7 @@ Then set up configuration for this plugin, see the [example config](./config.exa
 ## License
 
 European Union Public License 1.1 ([details](http://ec.europa.eu/idabc/eupl.html)) or later.
+
+> `zonemta-wildduck` module is part of the Zone Mail Suite (ZMS). Suite of programs and modules for an efficient, fast and modern email server.
+
+Copyright (c) 2024 Zone Media OÜ
