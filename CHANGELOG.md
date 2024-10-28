@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.18](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.17...v1.32.18) (2024-10-28)
+
+
+### Bug Fixes
+
+* **config:** DO not assume that gelf config is set ([62b7eb7](https://github.com/nodemailer/zonemta-wildduck/commit/62b7eb79efe0c2d43fcdf82ea3e24c56d82f6a3f))
+
 ## [1.32.17](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.16...v1.32.17) (2024-10-28)
 
 
