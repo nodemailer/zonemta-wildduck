@@ -30,7 +30,7 @@ module.exports.init = function (app, done) {
 
     const component = ((app.config.gelf && app.config.gelf.component) || 'mta').toUpperCase();
 
-    const maxSubjectLineLogLengthBytes = app.config.gelf.subjectLength || 32766 - 1; // 32766 is max gelf default, do -1 for good measure
+    const maxSubjectLineLogLengthBytes = (app.config.gelf && app.config.gelf.subjectLength) || 32766 - 1; // 32766 is max gelf default, do -1 for good measure
 
     const hostname = app.config.hostname || os.hostname();
     const gelf =
