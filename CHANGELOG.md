@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.32.17](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.16...v1.32.17) (2024-10-28)
+
+
+### Bug Fixes
+
+* **cicd-pipeline:** Add pipeline for building and pushing the docker image to GHCR ([1f4eeb4](https://github.com/nodemailer/zonemta-wildduck/commit/1f4eeb438249fbdaaed8cf17e87fe5ab3f777f56))
+* **gelf-subject:** Set default subject limit in gelf logs ZMS-177 ([#32](https://github.com/nodemailer/zonemta-wildduck/issues/32)) ([36cc6af](https://github.com/nodemailer/zonemta-wildduck/commit/36cc6af74d3e63fb74d927a48141813b53de71a2))
+* **license-readme:** ZMS-180 ([#33](https://github.com/nodemailer/zonemta-wildduck/issues/33)) ([81c4c7e](https://github.com/nodemailer/zonemta-wildduck/commit/81c4c7e70e568aa6d4cdf496cdcd534d648ab3a2))
+
 ## [1.32.16](https://github.com/nodemailer/zonemta-wildduck/compare/v1.32.15...v1.32.16) (2024-08-08)
 
 
