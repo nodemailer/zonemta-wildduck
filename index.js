@@ -719,7 +719,7 @@ module.exports.init = function (app, done) {
                 return next();
             }
 
-            ttlcounter('wdr:' + userData._id.toString(), 0, userData.recipients, false, (err, result) => {
+            ttlcounter(`wdr:${tools.redisHashTag(redisClient, userData._id)}`, 0, userData.recipients, false, (err, result) => {
                 if (err) {
                     return next(err);
                 }
@@ -821,7 +821,7 @@ module.exports.init = function (app, done) {
                 return next(err);
             }
 
-            ttlcounter('wdr:' + userData._id.toString(), envelope.to.length, userData.recipients, false, (/*err, result*/) => {
+            ttlcounter(`wdr:${tools.redisHashTag(redisClient, userData._id)}`, envelope.to.length, userData.recipients, false, (/*err, result*/) => {
                 // at his point we only update the counter but do not care about the result as message is already queued for delivery
 
                 database
